@@ -1,5 +1,7 @@
 # digital_twinning
 
+[![DOI](https://zenodo.org/badge/1113759480.svg)](https://doi.org/10.5281/zenodo.17990407)
+
 A comprehensive Python package for digital twin model updating and predictive modeling using machine learning and uncertainty quantification techniques.
 
 ## Overview
