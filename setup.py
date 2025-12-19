@@ -16,7 +16,7 @@ setup(
         'asyncio',
         'catboost',
         'emcee',
-        'gPCE_model',
+        'gPCE-model',
         'IPython',
         'lightgbm',
         'matplotlib',
@@ -29,7 +29,7 @@ setup(
         'shap',
         'scikit-learn',
         'torch',
-        'uncertain_variables',
+        'uncertain-variables',
         'xgboost'
     ],
     classifiers=[
