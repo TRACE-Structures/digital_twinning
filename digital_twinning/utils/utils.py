@@ -220,8 +220,8 @@ def plot_shap_single_waterfall(model, q, param_name):
         text_x = prediction + bar_length
         text_x_correction = x_range*0.02
         sign=''
+        x = text_x
         if sorted_bar_lengths[i] >= 0:
-            x = text_x
             text_x += text_x_correction
             alignment = 'left'
             color = '#E53935'
@@ -1389,3 +1389,4 @@ def test_paramset(variableset, sample):
             return {"valid": False, "message": f"Sample does not match the distribution of variable {param}."}
         
     return {"valid": True, "message": "Correct"}
+
