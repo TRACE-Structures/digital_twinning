@@ -1,4 +1,4 @@
-""" JointManager for multi-building model updating using MCMC"""
+""" JointManager for multi-model updating using MCMC"""
 
 import uncertain_variables as uv
 import pandas as pd
@@ -12,27 +12,27 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 class JointManager:
-    """ Class to manage joint model updating for multiple buildings through one or more shared parameters
+    """ Class to manage joint model updating for multiple models through one or more shared parameters
     
         Attributes
         ----------
         models : list of SurrogateModel
-            List of surrogate models for each building
+            List of surrogate models for each model
             
         joint_parameters : dict
-            Dictionary defining joint parameters across buildings
+            Dictionary defining joint parameters across the models
             
         Q : VariableSet
-            Joint VariableSet for all buildings
+            Joint VariableSet for all models
             
         indices : list of list of int
-            Indices mapping building parameters to joint parameters
+            Indices mapping model parameters to joint parameters
             
         scale : list of list of float
-            Scaling factors for each building's parameters
+            Scaling factors for each model's parameters
             
         shift : list of list of float
-            Shift values for each building's parameters
+            Shift values for each models's parameters
             
         Methods
         -------
@@ -42,10 +42,10 @@ class JointManager:
         generate_joint_stdrn_simparamset(sigmas)
             Generate joint standard random simulation variable set
             
-        choose_distribution(buildings, joint_names, mode='auto')
+        choose_distribution(models, joint_names, mode='auto')
             Choose distribution for joint parameters
             
-        get_joint_paramset_and_indices(buildings, joint_parameters)
+        get_joint_paramset_and_indices(models, joint_parameters)
             Create joint VariableSet and mapping indices
             
         get_logprob(q)
@@ -61,19 +61,19 @@ class JointManager:
             Perform MCMC update with observed data
             
         get_mean_and_var_by_model(scaled=True)
-            Get mean and variance of posterior for each building
+            Get mean and variance of posterior for each model
             
         get_MAP_by_model(scaled=True)
-            Get maximum a posteriori estimate for each building
+            Get maximum a posteriori estimate for each model
             
         get_MAP()
             Get maximum a posteriori estimate for joint parameters
             
         get_data_of_model(model_index)
-            Get MAP, mean, variance, and samples for a specific building
+            Get MAP, mean, variance, and samples for a specific model
             
         get_posterior_samples_by_model(scaled=True)
-            Get posterior samples for each building
+            Get posterior samples for each model
             
         get_posterior_samples()
             Get posterior samples for joint parameters """
@@ -84,10 +84,10 @@ class JointManager:
             Parameters
             ----------
             models : list of SurrogateModel
-                List of surrogate models for each building
+                List of surrogate models for each model
 
             joint_parameters : dict
-                Dictionary defining joint parameters across buildings """
+                Dictionary defining joint parameters across models """
         
         self.models = models
         self.joint_parameters = joint_parameters
@@ -99,7 +99,7 @@ class JointManager:
             Parameters
             ----------
             sigmas : list of pandas.DataFrame
-                List of standard deviation DataFrames for each building
+                List of standard deviation DataFrames for each model
             
             Returns
             -------
@@ -108,22 +108,22 @@ class JointManager:
         
         joint_sigma = np.zeros((1, 0))
         for i in range(len(sigmas)):
-            building_sigma = sigmas[i].values
-            joint_sigma = np.concatenate((joint_sigma, building_sigma), axis=1)
+            model_sigma = sigmas[i].values
+            joint_sigma = np.concatenate((joint_sigma, model_sigma), axis=1)
         joint_sigma = joint_sigma.reshape(-1, 1)
         E_joint = utils.generate_stdrn_simparamset(joint_sigma)
         return E_joint
     
-    def choose_distribution(self, buildings, joint_names, mode='auto'):
+    def choose_distribution(self, models, joint_names, mode='auto'):
         """ Choose distribution for joint parameters
 
             Parameters
             ----------
-            buildings : list of SurrogateModel
-                List of surrogate models of the buildings
+            models : list of SurrogateModel
+                List of surrogate models of the models
 
             joint_names : list of str
-                List of joint parameter names for each building
+                List of joint parameter names for each model
 
             mode : str, optional
                 Mode for choosing distribution ('first_dist', 'uniform', 'normal', 'auto'), by default 'auto'
@@ -137,7 +137,7 @@ class JointManager:
             for i in range(len(joint_names)):
                 if joint_names[i] != '-':
                     break
-            distribution = buildings[i].Q.variables[joint_names[i]]
+            distribution = models[i].Q.variables[joint_names[i]]
             return distribution
         
         elif mode == 'uniform':
@@ -152,87 +152,87 @@ class JointManager:
             for i in range(len(joint_names)):
                 if joint_names[i] != '-':
                     break
-            if buildings[i].Q.variables[joint_names[i]].get_dist_type() == 'unif':
+            if models[i].Q.variables[joint_names[i]].get_dist_type() == 'unif':
                 distribution = uv.UniformDistribution(0, 1)
                 return distribution
-            elif buildings[i].Q.variables[joint_names[i]].get_dist_type() == 'norm':
+            elif models[i].Q.variables[joint_names[i]].get_dist_type() == 'norm':
                 distribution = uv.NormalDistribution(0, 1)
                 return distribution                
     
-    def get_joint_paramset_and_indices(self, buildings, joint_parameters):
+    def get_joint_paramset_and_indices(self, models, joint_parameters):
         """ Create joint VariableSet and mapping indices
 
             Parameters
             ----------
-            buildings : list of SurrogateModel
-                List of surrogate models of the buildings
+            models : list of SurrogateModel
+                List of surrogate models of the models
 
             joint_parameters : dict
-                Dictionary defining joint parameters across buildings
+                Dictionary defining joint parameters across models
 
             Returns
             -------
             Q_joint : VariableSet
-                Joint VariableSet for all buildings
+                Joint VariableSet for all models
 
             indices : list of list of int
-                Indices mapping building parameters to joint parameters
+                Indices mapping model parameters to joint parameters
 
             scale : list of list of float
-                Scaling factors for each building's parameters
+                Scaling factors for each model's parameters
 
             shift : list of list of float
-                Shift values for each building's parameters """
+                Shift values for each model's parameters """
         
-        building_parameters = []
-        for b in range(len(buildings)):
-            building_parameters.append(buildings[b].Q.param_names())
+        model_parameters = []
+        for b in range(len(models)):
+            model_parameters.append(models[b].Q.param_names())
         joint_names = list(joint_parameters.keys())
         for i in range(len(joint_parameters)):
             parameter_list = joint_parameters[joint_names[i]]
-            assert len(parameter_list) == len(building_parameters), "The jointparameters should contain every building. Put a '-' when you don't want to use the building for parameter join"
-            for j in range(len(building_parameters)):
+            assert len(parameter_list) == len(model_parameters), "The jointparameters should contain every model. Put a '-' when you don't want to use the model for parameter join"
+            for j in range(len(model_parameters)):
                 if parameter_list[j] != '-':
-                    assert parameter_list[j] in building_parameters[j], "Parameter '{}' is not in parameter list {}".format(parameter_list[j], building_parameters[j])
+                    assert parameter_list[j] in model_parameters[j], "Parameter '{}' is not in parameter list {}".format(parameter_list[j], model_parameters[j])
 
         Q_joint = uv.VariableSet()
 
         indices = []
         scale = []
         shift = []
-        for i in range(len(building_parameters)):
-            indices.append([None]*len(building_parameters[i]))
-            scale.append([1]*len(building_parameters[i]))
-            shift.append([0]*len(building_parameters[i]))
+        for i in range(len(model_parameters)):
+            indices.append([None]*len(model_parameters[i]))
+            scale.append([1]*len(model_parameters[i]))
+            shift.append([0]*len(model_parameters[i]))
         
         for i in range(len(joint_parameters)):
-            distribution = self.choose_distribution(buildings, joint_parameters[joint_names[i]], mode='auto')
+            distribution = self.choose_distribution(models, joint_parameters[joint_names[i]], mode='auto')
             JointParameter = uv.Variable(joint_names[i], distribution)
             Q_joint.add(JointParameter)
             scale0 = distribution.get_bounds()[1] - distribution.get_bounds()[0]
             shift0 = distribution.get_bounds()[0]
-            for j in range(len(building_parameters)):
+            for j in range(len(model_parameters)):
                 param_name = joint_parameters[joint_names[i]][j]
                 if param_name != '-':
-                    idx = buildings[j].Q.param_names().index(param_name)
+                    idx = models[j].Q.param_names().index(param_name)
                     indices[j][idx] = i
                     
-                    lower_bound = buildings[j].Q.get_bounds()[idx][0]
-                    higher_bound = buildings[j].Q.get_bounds()[idx][1]
+                    lower_bound = models[j].Q.get_bounds()[idx][0]
+                    higher_bound = models[j].Q.get_bounds()[idx][1]
                     scale[j][idx] = (higher_bound - lower_bound) / scale0
                     shift[j][idx] = lower_bound - scale0*shift0
-                    building_parameters[j].remove(param_name)
+                    model_parameters[j].remove(param_name)
 
-        for i in range(len(building_parameters)):
-            for j in range(len(building_parameters[i])):
-                Parameter = uv.Variable(building_parameters[i][j], buildings[i].Q.variables[building_parameters[i][j]])    
+        for i in range(len(model_parameters)):
+            for j in range(len(model_parameters[i])):
+                Parameter = uv.Variable(model_parameters[i][j], models[i].Q.variables[model_parameters[i][j]])    
                 Q_joint.add(Parameter)
 
-        for i in range(len(building_parameters)):
-            for j in range(len(building_parameters[i])):
-                parameter = building_parameters[i][j]
+        for i in range(len(model_parameters)):
+            for j in range(len(model_parameters[i])):
+                parameter = model_parameters[i][j]
                 idx = Q_joint.param_names().index(parameter)
-                original_index = buildings[i].Q.param_names().index(parameter)
+                original_index = models[i].Q.param_names().index(parameter)
                 indices[i][original_index]  = idx   
         
         return Q_joint, indices, scale, shift
@@ -307,10 +307,10 @@ class JointManager:
             Parameters
             ----------
             y_list : list of pandas.DataFrame
-                List of observed data DataFrames for each building
+                List of observed data DataFrames for each model
 
             sigmas : list of pandas.DataFrame
-                List of standard deviation DataFrames for each building
+                List of standard deviation DataFrames for each model
 
             nwalkers : int, optionnal
                 Number of MCMC walkers, by default 150
@@ -330,8 +330,8 @@ class JointManager:
         self.Q_ = Q_
         y_m = np.zeros((1, 0))
         for i in range(len(y_list)):
-            y_building = y_list[i].to_numpy()
-            y_m = np.concatenate((y_m, y_building), axis=1)
+            y_model = y_list[i].to_numpy()
+            y_m = np.concatenate((y_m, y_model), axis=1)
         self.y_m = y_m
         num_param = self.Q.num_params()
         self.E = self.generate_joint_stdrn_simparamset(sigmas)
@@ -361,7 +361,7 @@ class JointManager:
         self.sampler = sampler
 
     def get_mean_and_var_by_model(self, scaled=True):
-        """ Get mean and variance of posterior for each building
+        """ Get mean and variance of posterior for each model
         
             Parameters
             ----------
@@ -371,10 +371,10 @@ class JointManager:
             Returns
             -------
             mean_dfs : list of pandas.DataFrame
-                List of DataFrames containing the mean of the posterior for each building
+                List of DataFrames containing the mean of the posterior for each model
                 
             varance_dfs : list of pandas.DataFrame
-                List of DataFrames containing the variance of the posterior for each building """
+                List of DataFrames containing the variance of the posterior for each model """
         
         sampler = self.sampler
         post_samples = sampler.get_chain(flat=True)
@@ -396,7 +396,7 @@ class JointManager:
         return mean_dfs, varance_dfs
 
     def get_MAP_by_model(self, scaled=True):
-        """ Get maximum a posteriori estimate for each building
+        """ Get maximum a posteriori estimate for each model
             
             Parameters
             ----------
@@ -406,7 +406,7 @@ class JointManager:
             Returns
             -------
             map_dfs : list of pandas.DataFrame
-                List of DataFrames containing the MAP estimate for each building """
+                List of DataFrames containing the MAP estimate for each model """
         sampler = self.sampler
         post_samples = sampler.get_chain(flat=True)
 
@@ -443,26 +443,26 @@ class JointManager:
         return map_df
     
     def get_data_of_model(self, model_index):
-        """ Get MAP, mean, variance, and samples for a specific building
+        """ Get MAP, mean, variance, and samples for a specific model
 
             Parameters
             ----------
             model_index : int
-                Index of the building model
+                Index of the model model
 
             Returns
             -------
             map_df : pandas.DataFrame
-                DataFrame containing the MAP estimate for the building
+                DataFrame containing the MAP estimate for the model
                 
             mean_df : pandas.DataFrame
-                DataFrame containing the mean of the posterior for the building
+                DataFrame containing the mean of the posterior for the model
                 
             var_df : pandas.DataFrame
-                DataFrame containing the variance of the posterior for the building 
+                DataFrame containing the variance of the posterior for the model 
             
             sample_df : pandas.DataFrame
-                DataFrame containing the samples from the posterior for the building"""
+                DataFrame containing the samples from the posterior for the model"""
         
         maps = self.get_MAP_by_model()
         means, vars = self.get_mean_and_var_by_model()
@@ -474,7 +474,7 @@ class JointManager:
         return map_df, mean_df, var_df, sample_df
     
     def get_posterior_samples_by_model(self, scaled=True):
-        """ Get posterior samples for each building
+        """ Get posterior samples for each model
 
             Parameters
             ----------
@@ -484,7 +484,7 @@ class JointManager:
             Returns
             -------
             sample_dfs : list of pandas.DataFrame
-                List of DataFrames containing the samples from the posterior for each building"""
+                List of DataFrames containing the samples from the posterior for each model"""
         
         sampler = self.sampler
         post_samples = sampler.get_chain(flat=True)
