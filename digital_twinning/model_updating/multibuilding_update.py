@@ -137,7 +137,7 @@ class JointManager:
             for i in range(len(joint_names)):
                 if joint_names[i] != '-':
                     break
-            distribution = buildings[i].Q.params[joint_names[i]]
+            distribution = buildings[i].Q.variables[joint_names[i]]
             return distribution
         
         elif mode == 'uniform':
@@ -152,10 +152,10 @@ class JointManager:
             for i in range(len(joint_names)):
                 if joint_names[i] != '-':
                     break
-            if buildings[i].Q.params[joint_names[i]].get_dist_type() == 'unif':
+            if buildings[i].Q.variables[joint_names[i]].get_dist_type() == 'unif':
                 distribution = uv.UniformDistribution(0, 1)
                 return distribution
-            elif buildings[i].Q.params[joint_names[i]].get_dist_type() == 'norm':
+            elif buildings[i].Q.variables[joint_names[i]].get_dist_type() == 'norm':
                 distribution = uv.NormalDistribution(0, 1)
                 return distribution                
     
@@ -225,7 +225,7 @@ class JointManager:
 
         for i in range(len(building_parameters)):
             for j in range(len(building_parameters[i])):
-                Parameter = uv.Variable(building_parameters[i][j], buildings[i].Q.params[building_parameters[i][j]])    
+                Parameter = uv.Variable(building_parameters[i][j], buildings[i].Q.variables[building_parameters[i][j]])    
                 Q_joint.add(Parameter)
 
         for i in range(len(building_parameters)):
