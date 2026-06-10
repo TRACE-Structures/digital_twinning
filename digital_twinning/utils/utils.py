@@ -187,11 +187,11 @@ def plot_shap_single_waterfall(model, q, param_name):
             Waterfall plot figure. '''
     
     if type(q) != pd.DataFrame:
-        q = pd.DataFrame([q], columns=model.Q.param_names())
+        q = pd.DataFrame([q], columns=model.Q.variable_names())
             
     explainer = model.model.explainer
     shap_values = explainer(q)
-    labels = model.Q.param_names()
+    labels = model.Q.variable_names()
     param_index = model.QoI_names.index(param_name)
     values = shap_values[0, :, param_index].data
     bar_lengths = shap_values[0, :, param_index].values
@@ -286,12 +286,12 @@ def plot_shap_multiple_waterfalls(model, q, param_name=None, show_param_values=F
             Figure with SHAP waterfall bar plots for multiple QoIs. '''
     
     if type(q) != pd.DataFrame:
-        q = pd.DataFrame([q], columns=model.Q.param_names())
+        q = pd.DataFrame([q], columns=model.Q.variable_names())
 
     explainer = model.model.explainer
     shap_values = explainer(q)
     
-    labels = model.Q.param_names()
+    labels = model.Q.variable_names()
     QoI_names = model.QoI_names
     num_params = len(QoI_names)
     num_features = len(labels)
@@ -496,7 +496,7 @@ def plot_MCMC_results(Q, sampler, num_param, nwalkers, highlight_point=None, sca
 
     post_samples = sampler.get_chain(flat=True)
 
-    h = sns.PairGrid(pd.DataFrame(post_samples[:, :], columns=Q.param_names()))
+    h = sns.PairGrid(pd.DataFrame(post_samples[:, :], columns=Q.variable_names()))
     h.map_diag(plt.hist, color="#2f779dff", bins=15, linewidth=0.3)
     h.map_upper(sns.scatterplot, color="#2f779dff", s=10, linewidth=0.3)
     h.map_lower(sns.scatterplot, color="#2f779dff", s=10, linewidth=0.3)
@@ -547,16 +547,16 @@ def plot_MCMC(model_obj, X_train, DigitalTwin, nwalkers=None, extra_point=None, 
         matplotlib.figure.Figure
             Pairplot figure with priors, posteriors, and highlighted points. '''
     
-    prior_samples = pd.DataFrame(X_train, columns=model_obj.Q.param_names())
+    prior_samples = pd.DataFrame(X_train, columns=model_obj.Q.variable_names())
     posterior_samples = (
-        pd.DataFrame(DigitalTwin.sampler.get_chain(flat=True), columns=model_obj.Q.param_names()) 
+        pd.DataFrame(DigitalTwin.sampler.get_chain(flat=True), columns=model_obj.Q.variable_names()) 
         if DigitalTwin else None
     )
     if extra_point is not None and not isinstance(extra_point, pd.DataFrame):
-        extra_point = pd.DataFrame(extra_point, columns=model_obj.Q.param_names())
+        extra_point = pd.DataFrame(extra_point, columns=model_obj.Q.variable_names())
         
     mean_value = posterior_samples.mean()
-    param_names = model_obj.Q.param_names()
+    param_names = model_obj.Q.variable_names()
     n_params = len(param_names)
     prior_color = '#b8b8b8'
     posterior_color = '#1a80bb'
@@ -654,12 +654,12 @@ def plot_posterior(model_obj, DigitalTwin, nwalkers, true_point=None, map_point=
             Posterior distributions pairgrid figure. '''
     
     if true_point is not None and type(true_point) != pd.DataFrame:
-        true_point = pd.DataFrame(true_point, columns=model_obj.Q.param_names())
+        true_point = pd.DataFrame(true_point, columns=model_obj.Q.variable_names())
     sampler = DigitalTwin.sampler
     nwalkers = DigitalTwin.p0
     param_bounds = model_obj.Q.get_bounds()
-    columns = model_obj.Q.param_names()
-    num_param = model_obj.Q.num_params()
+    columns = model_obj.Q.variable_names()
+    num_param = model_obj.Q.num_variables()
 
     post_samples = sampler.get_chain(flat=True)
 
@@ -725,8 +725,8 @@ def plot_prior(model_obj, X_train, true_point=None, scale=1):
             Prior distribution pairgrid plot. '''
     
     if true_point is not None and type(true_point) != pd.DataFrame:
-        true_point = pd.DataFrame(true_point, columns=model_obj.Q.param_names())
-    num_param = model_obj.Q.num_params()
+        true_point = pd.DataFrame(true_point, columns=model_obj.Q.variable_names())
+    num_param = model_obj.Q.num_variables()
     param_bounds = model_obj.Q.get_bounds()
     prios_samples = X_train
 
@@ -853,7 +853,7 @@ def plot_2D_with_plane_highlight(K, M, Z, Y_m, epsilon=0.1):
     plt.grid(True)
 
 
-def plot_multibuilding_MCMC(jointManager, extra_point=None, extra_point_name='Extra point', map_point=True, model_names=None, formatted_param_names=None):
+def plot_multimodel_MCMC(jointManager, extra_point=None, extra_point_name='Extra point', map_point=True, model_names=None, formatted_param_names=None):
     ''' Plot prior and posterior distributions for multiple models with optional highlights.
 
         Parameters
@@ -878,10 +878,10 @@ def plot_multibuilding_MCMC(jointManager, extra_point=None, extra_point_name='Ex
     
     figures = []
     for m in range(len(jointManager.models)):
-        prior_samples = pd.DataFrame(jointManager.models[m].Q.sample(1000), columns=jointManager.models[m].Q.param_names())
-        posterior_samples = pd.DataFrame(jointManager.sampler.get_chain(flat=True)[:, jointManager.indices[m]] * jointManager.scale[m] + jointManager.shift[m], columns=jointManager.models[m].Q.param_names())
+        prior_samples = pd.DataFrame(jointManager.models[m].Q.sample(1000), columns=jointManager.models[m].Q.variable_names())
+        posterior_samples = pd.DataFrame(jointManager.models[m].Q.germ2variable(jointManager.sampler.get_chain(flat=True)[:, jointManager.indices[m]]), columns=jointManager.models[m].Q.variable_names())
         
-        param_names = jointManager.models[m].Q.param_names()
+        param_names = jointManager.models[m].Q.variable_names()
         mean_value = posterior_samples.mean()
         n_params = len(param_names)
         prior_color = '#b8b8b8'
@@ -891,7 +891,7 @@ def plot_multibuilding_MCMC(jointManager, extra_point=None, extra_point_name='Ex
         if map_point:
             map_p = []
             for p in range(len(jointManager.indices[m])):
-                map_p.append(estimate_maxima(jointManager.sampler.get_chain(flat=True)[:, jointManager.indices[m][p]] * jointManager.scale[m][p] + jointManager.shift[m][p]))
+                map_p.append(estimate_maxima(jointManager.models[m].Q.germ2variable(jointManager.sampler.get_chain(flat=True)[:, jointManager.indices[m]])[:, p]))
 
         prior_samples['Dataset'] = 'Prior'
         if posterior_samples is not None:
@@ -1082,7 +1082,7 @@ def plot_grid_update_points_and_surfaces(Q, sampler, model, y_m, q_true, epsilon
     if type(y_m) == pd.DataFrame:
         y_m = y_m.to_numpy().squeeze()
         
-    names = Q.param_names()
+    names = Q.variable_names()
     bounds = Q.get_bounds()
 
     n_params = len(names)
@@ -1221,24 +1221,6 @@ def get_simparamset_from_data(data, verbose=False):
         Q.add(P)
     return Q
 
-def generate_stdrn_simparamset(sigma):
-    ''' Generate VariableSet of standard normal variables scaled by provided std deviations.
-    
-        Parameters
-        ----------
-        sigma : array_like
-            Standard deviations for each variable.
-        
-        Returns
-        -------
-        VariableSet
-            VariableSet with zero-mean Normal variables using given std deviations. '''
-    
-    Q = uv.VariableSet()
-    for i in range(len(sigma)):
-        s = uv.Variable('pn_' + str(i+1), uv.NormalDistribution(0, sigma[i]))
-        Q.add(s)
-    return Q
 
 ############################################################################################
 #                      y_scaler_svd and y_scaler classes
