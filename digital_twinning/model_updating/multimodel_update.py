@@ -91,73 +91,7 @@ class JointManager:
         
         self.models = models
         self.joint_parameters = joint_parameters
-        self.Q, self.indices, self.scale, self.shift = self.get_joint_paramset_and_indices(models, joint_parameters)
-
-    def generate_joint_stdrn_simparamset(self, sigmas):
-        """ Generate joint standard random simulation variable set
-
-            Parameters
-            ----------
-            sigmas : list of pandas.DataFrame
-                List of standard deviation DataFrames for each model
-            
-            Returns
-            -------
-            E_joint : VariableSet
-                Joint standard random simulation variable set """
-        
-        joint_sigma = np.zeros((1, 0))
-        for i in range(len(sigmas)):
-            model_sigma = sigmas[i].values
-            joint_sigma = np.concatenate((joint_sigma, model_sigma), axis=1)
-        joint_sigma = joint_sigma.reshape(-1, 1)
-        E_joint = utils.generate_stdrn_simparamset(joint_sigma)
-        return E_joint
-    
-    def choose_distribution(self, models, joint_names, mode='auto'):
-        """ Choose distribution for joint parameters
-
-            Parameters
-            ----------
-            models : list of SurrogateModel
-                List of surrogate models of the models
-
-            joint_names : list of str
-                List of joint parameter names for each model
-
-            mode : str, optional
-                Mode for choosing distribution ('first_dist', 'uniform', 'normal', 'auto'), by default 'auto'
-
-            Returns
-            -------
-            distribution : Distribution
-                Chosen distribution for the joint parameter"""
-        
-        if mode == 'first_dist':
-            for i in range(len(joint_names)):
-                if joint_names[i] != '-':
-                    break
-            distribution = models[i].Q.variables[joint_names[i]]
-            return distribution
-        
-        elif mode == 'uniform':
-            distribution = uv.UniformDistribution(0, 1)
-            return distribution
-        
-        elif mode == 'normal':
-            distribution = uv.NormalDistribution(0, 1)
-            return distribution
-        
-        elif mode == 'auto':
-            for i in range(len(joint_names)):
-                if joint_names[i] != '-':
-                    break
-            if models[i].Q.variables[joint_names[i]].get_dist_type() == 'unif':
-                distribution = uv.UniformDistribution(0, 1)
-                return distribution
-            elif models[i].Q.variables[joint_names[i]].get_dist_type() == 'norm':
-                distribution = uv.NormalDistribution(0, 1)
-                return distribution                
+        self.Q, self.indices = self.get_joint_paramset_and_indices(models, joint_parameters)
     
     def get_joint_paramset_and_indices(self, models, joint_parameters):
         """ Create joint VariableSet and mapping indices
@@ -186,7 +120,7 @@ class JointManager:
         
         model_parameters = []
         for b in range(len(models)):
-            model_parameters.append(models[b].Q.param_names())
+            model_parameters.append(models[b].Q.variable_names())
         joint_names = list(joint_parameters.keys())
         for i in range(len(joint_parameters)):
             parameter_list = joint_parameters[joint_names[i]]
@@ -195,48 +129,44 @@ class JointManager:
                 if parameter_list[j] != '-':
                     assert parameter_list[j] in model_parameters[j], "Parameter '{}' is not in parameter list {}".format(parameter_list[j], model_parameters[j])
 
-        Q_joint = uv.VariableSet()
-
         indices = []
-        scale = []
-        shift = []
         for i in range(len(model_parameters)):
             indices.append([None]*len(model_parameters[i]))
-            scale.append([1]*len(model_parameters[i]))
-            shift.append([0]*len(model_parameters[i]))
-        
+
+        Q_joint = uv.VariableSet()
+
         for i in range(len(joint_parameters)):
-            distribution = self.choose_distribution(models, joint_parameters[joint_names[i]], mode='auto')
-            JointParameter = uv.Variable(joint_names[i], distribution)
-            Q_joint.add(JointParameter)
-            scale0 = distribution.get_bounds()[1] - distribution.get_bounds()[0]
-            shift0 = distribution.get_bounds()[0]
-            for j in range(len(model_parameters)):
-                param_name = joint_parameters[joint_names[i]][j]
-                if param_name != '-':
-                    idx = models[j].Q.param_names().index(param_name)
+            joint_name = joint_names[i]
+            parameter_list = joint_parameters[joint_name]
+            joint_dist = None
+            for j in range(len(models)):
+                variable_name = parameter_list[j]
+                if variable_name != '-':
+                    dist = models[j].Q.get_variables()[variable_name].get_base_dist()
+                    if joint_dist == None:
+                        joint_dist = dist
+                    assert dist == joint_dist, "Joining variables with different distribution type is not supported"
+                    idx = models[j].Q.variable_names().index(variable_name)
+                
                     indices[j][idx] = i
-                    
-                    lower_bound = models[j].Q.get_bounds()[idx][0]
-                    higher_bound = models[j].Q.get_bounds()[idx][1]
-                    scale[j][idx] = (higher_bound - lower_bound) / scale0
-                    shift[j][idx] = lower_bound - scale0*shift0
-                    model_parameters[j].remove(param_name)
-
+                    model_parameters[j].remove(variable_name)
+            J = uv.Variable(joint_name, joint_dist)
+            Q_joint.add(J)
+            
         for i in range(len(model_parameters)):
             for j in range(len(model_parameters[i])):
-                Parameter = uv.Variable(model_parameters[i][j], models[i].Q.variables[model_parameters[i][j]])    
-                Q_joint.add(Parameter)
+                variable_name = model_parameters[i][j]
+                dist = models[i].Q.variables[variable_name].get_base_dist()
+                V = uv.Variable(variable_name, dist)    
+                Q_joint.add(V)
+                
+                idx = Q_joint.variable_names().index(variable_name)
+                original_index = models[i].Q.variable_names().index(variable_name)
+                indices[i][original_index]  = idx
 
-        for i in range(len(model_parameters)):
-            for j in range(len(model_parameters[i])):
-                parameter = model_parameters[i][j]
-                idx = Q_joint.param_names().index(parameter)
-                original_index = models[i].Q.param_names().index(parameter)
-                indices[i][original_index]  = idx   
-        
-        return Q_joint, indices, scale, shift
-    
+        return Q_joint, indices
+
+
     def get_logprob(self, q):
         """ Compute log-probability for MCMC
 
@@ -289,11 +219,12 @@ class JointManager:
             logp : float
                 Log-likelihood of the observed data given the parameter values """
         
-        q_df = pd.DataFrame(q.reshape(1,-1), columns=self.Q.param_names())
+        q = q.reshape(1, -1)
+        q_df = pd.DataFrame(q, columns=self.Q.variable_names())
         predictions = np.zeros((1, 0))
         for i in range(len(self.models)):
-            q_model = q[self.indices[i]] * self.scale[i] + self.shift[i]
-            q_df = pd.DataFrame(q_model.reshape(1,-1), columns=self.models[i].Q.param_names())
+            q_model = self.models[i].Q.germ2variable(q[:, self.indices[i]])
+            q_df = pd.DataFrame(q_model, columns=self.models[i].Q.variable_names())
             y_model = self.models[i].predict(q_df)
             predictions = np.concatenate((predictions, y_model), axis=1)
         d = y_m - predictions
@@ -333,8 +264,14 @@ class JointManager:
             y_model = y_list[i].to_numpy()
             y_m = np.concatenate((y_m, y_model), axis=1)
         self.y_m = y_m
-        num_param = self.Q.num_params()
-        self.E = self.generate_joint_stdrn_simparamset(sigmas)
+        num_param = self.Q.num_variables()
+
+        joint_sigma = np.zeros((1, 0))
+        for i in range(len(sigmas)):
+            model_sigma = sigmas[i].values
+            joint_sigma = np.concatenate((joint_sigma, model_sigma), axis=1)
+        joint_sigma = joint_sigma.reshape(-1, 1)
+        self.E = uv.generate_stndrn_variable_set(joint_sigma)
 
 
         if Q_ == 'default':
@@ -382,15 +319,15 @@ class JointManager:
         varance_dfs = []
         for i in range(len(self.models)):
             model_samples = post_samples[:, self.indices[i]]
-            means = np.mean(model_samples, axis=0)
-            variances = np.var(model_samples, axis=0)
+            means = np.mean(model_samples, axis=0).reshape(1,-1)
+            variances = np.var(model_samples, axis=0).reshape(1,-1)
 
             if scaled:
-                means = means * self.scale[i] + self.shift[i]
-                variances = variances * self.scale[i]
+                means = self.models[i].Q.germ2variable(means)
+                variances = self.models[i].Q.germ2variable(variances)
 
-            means_df = pd.DataFrame(means.reshape(1,-1), columns=self.models[i].Q.param_names())
-            variances_df = pd.DataFrame(variances.reshape(1,-1), columns=self.models[i].Q.param_names())
+            means_df = pd.DataFrame(means, columns=self.models[i].Q.variable_names())
+            variances_df = pd.DataFrame(variances, columns=self.models[i].Q.variable_names())
             mean_dfs.append(means_df)
             varance_dfs.append(variances_df)
         return mean_dfs, varance_dfs
@@ -418,8 +355,8 @@ class JointManager:
                 p_estimate = utils.estimate_maxima(model_samples[:,p])
                 map_estimate[0,p] = p_estimate
             if scaled:
-                map_estimate = map_estimate * self.scale[i] + self.shift[i]
-            map_df = pd.DataFrame(map_estimate, columns=self.models[i].Q.param_names())
+                map_estimate = self.models[i].Q.germ2variable(map_estimate)
+            map_df = pd.DataFrame(map_estimate, columns=self.models[i].Q.variable_names())
             map_dfs.append(map_df)
         return map_dfs        
         
@@ -439,10 +376,10 @@ class JointManager:
             p_estimate = utils.estimate_maxima(post_samples[:,p])
             map_estimate[0,p] = p_estimate
 
-        map_df = pd.DataFrame(map_estimate, columns=self.Q.param_names())
+        map_df = pd.DataFrame(map_estimate, columns=self.Q.variable_names())
         return map_df
     
-    def get_data_of_model(self, model_index):
+    def get_data_of_model(self, model_index, scaled=True):
         """ Get MAP, mean, variance, and samples for a specific model
 
             Parameters
@@ -464,9 +401,9 @@ class JointManager:
             sample_df : pandas.DataFrame
                 DataFrame containing the samples from the posterior for the model"""
         
-        maps = self.get_MAP_by_model()
-        means, vars = self.get_mean_and_var_by_model()
-        samples = self.get_posterior_samples_by_model()
+        maps = self.get_MAP_by_model(scaled)
+        means, vars = self.get_mean_and_var_by_model(scaled)
+        samples = self.get_posterior_samples_by_model(scaled)
         map_df = maps[model_index]
         mean_df = means[model_index]
         var_df = vars[model_index]
@@ -492,8 +429,8 @@ class JointManager:
         for i in range(len(self.models)):
             model_samples = post_samples[:, self.indices[i]]
             if scaled:
-                model_samples = model_samples * self.scale[i] + self.shift[i]
-            sample_dfs.append(pd.DataFrame(model_samples, columns=self.models[i].Q.param_names()))
+                model_samples = self.models[i].Q.germ2variable(model_samples)
+            sample_dfs.append(pd.DataFrame(model_samples, columns=self.models[i].Q.variable_names()))
         return sample_dfs
     
     def get_posterior_samples(self):
@@ -506,5 +443,5 @@ class JointManager:
         
         sampler = self.sampler
         post_samples = sampler.get_chain(flat=True)
-        post_samples_df = pd.DataFrame(post_samples, columns=self.Q.param_names())
+        post_samples_df = pd.DataFrame(post_samples, columns=self.Q.variable_names())
         return post_samples_df
