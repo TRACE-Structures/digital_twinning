@@ -121,12 +121,12 @@ class DigitalTwin:
             H = self.model.create_mx_from_tuple(name_pairs, list(y_m.keys()))
             self.q_indices, y_indices = self.get_indices_from_mx(H)
             y_m = y_m.to_numpy().reshape(-1, 1)[y_indices]
-            self.E = self.E.diminished_paramset(y_indices)
+            self.E = self.E.diminished_variable_set(y_indices)
         else:
             self.q_indices = None
             y_m = y_m.to_numpy()
         self.y_m = y_m
-        num_param = self.Q.num_params()
+        num_param = self.Q.num_variables()
         
         if Q_ == 'default':
             p0 = self.Q.sample(nwalkers)
@@ -171,7 +171,7 @@ class DigitalTwin:
         
         # TODO inverse_transform to predicted data
         #q = self.model.get_scaled_q(q.reshape(1,-1))
-        q_df = pd.DataFrame(q.reshape(1,-1), columns=self.Q.param_names())
+        q_df = pd.DataFrame(q.reshape(1,-1), columns=self.Q.variable_names())
         d = y_m - self.model.predict(q_df)
         d = d.transpose()
         p = self.E.pdf(d)
@@ -193,7 +193,7 @@ class DigitalTwin:
             logp : float
                 Log-likelihood of the measurements y_m given parameters q"""
         
-        q_df = pd.DataFrame(q.reshape(1,-1), columns=self.Q.param_names())
+        q_df = pd.DataFrame(q.reshape(1,-1), columns=self.Q.variable_names())
         if self.q_indices is None:
             d = y_m - self.model.predict(q_df)
             d = d.transpose()
@@ -249,8 +249,8 @@ class DigitalTwin:
         post_samples = sampler.get_chain(flat=True)
         means = np.mean(post_samples, axis=0)
         variances = np.var(post_samples, axis=0)
-        means_df = pd.DataFrame(means.reshape(1,-1), columns=self.Q.param_names())
-        variances_df = pd.DataFrame(variances.reshape(1,-1), columns=self.Q.param_names())
+        means_df = pd.DataFrame(means.reshape(1,-1), columns=self.Q.variable_names())
+        variances_df = pd.DataFrame(variances.reshape(1,-1), columns=self.Q.variable_names())
         return means_df, variances_df
     
     def get_posterior_samples(self):
@@ -263,7 +263,7 @@ class DigitalTwin:
         
         sampler = self.sampler
         post_samples = sampler.get_chain(flat=True)
-        post_samples_df = pd.DataFrame(post_samples, columns=self.Q.param_names())
+        post_samples_df = pd.DataFrame(post_samples, columns=self.Q.variable_names())
         return post_samples_df
     
     def get_MAP(self): # maximum a posterior estimate
@@ -282,7 +282,7 @@ class DigitalTwin:
             p_estimate = utils.estimate_maxima(post_samples[:,p])
             map_estimate[0,p] = p_estimate
 
-        map_df = pd.DataFrame(map_estimate, columns=self.Q.param_names())
+        map_df = pd.DataFrame(map_estimate, columns=self.Q.variable_names())
         return map_df
     
     def get_indices_from_mx(self, H):
@@ -312,4 +312,3 @@ class DigitalTwin:
                 y_indices.append(np.where(H[i, :]==1)[0][0])
 
         return q_indices, y_indices
-                
