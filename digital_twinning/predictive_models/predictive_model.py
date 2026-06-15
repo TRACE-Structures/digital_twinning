@@ -120,7 +120,7 @@ class PredictiveModel:
             case "DNN":
                 self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 print(f"Using device: {self.device}") # TODO use GPU in dnn_surrogate
-                DNN = DNNModel(self.Q.num_params(), len(self.QoI_names), **self.init_config)
+                DNN = DNNModel(self.Q.num_variables(), len(self.QoI_names), **self.init_config)
                 DNN = DNN.double() # modify all datatype of model's parameters to torch.float64
                 return DNN
             case "gPCE":
@@ -279,11 +279,11 @@ class PredictiveModel:
             case "gPCE":
                 tr_loss, vl_loss = self.model.train_and_evaluate(xi_train, yt_train, xi_val, yt_val)
             case "GBT":
-                xi_tr, xi_vl = pd.DataFrame(xi_train, columns=self.Q.param_names()), pd.DataFrame(xi_val, columns=self.Q.param_names())
+                xi_tr, xi_vl = pd.DataFrame(xi_train, columns=self.Q.variable_names()), pd.DataFrame(xi_val, columns=self.Q.variable_names())
                 yt_tr, yt_vl = pd.DataFrame(yt_train, columns=self.QoI_names), pd.DataFrame(yt_val, columns=self.QoI_names)                 
                 tr_loss, vl_loss = self.model.train_and_validate(xi_tr, yt_tr, xi_vl, yt_vl, **params)
             case "LinReg":
-                xi_tr, xi_vl = pd.DataFrame(xi_train, columns=self.Q.param_names()), pd.DataFrame(xi_val, columns=self.Q.param_names())
+                xi_tr, xi_vl = pd.DataFrame(xi_train, columns=self.Q.variable_names()), pd.DataFrame(xi_val, columns=self.Q.variable_names())
                 yt_tr, yt_vl = pd.DataFrame(yt_train, columns=self.QoI_names), pd.DataFrame(yt_val, columns=self.QoI_names)
                 tr_loss, vl_loss = self.model.train_and_evaluate(xi_tr, yt_tr, xi_vl, yt_vl)
             case _:
@@ -375,7 +375,7 @@ class PredictiveModel:
         '''
 
         if type(q) != pd.DataFrame:
-            q = pd.DataFrame(q, columns=self.Q.param_names())
+            q = pd.DataFrame(q, columns=self.Q.variable_names())
         if self.method == "gPCE":
             xi = q.values
         else:
@@ -386,9 +386,9 @@ class PredictiveModel:
             case "gPCE":
                 pass
             case "GBT":
-                xi = pd.DataFrame(xi, columns=self.Q.param_names())
+                xi = pd.DataFrame(xi, columns=self.Q.variable_names())
             case "LinReg":
-                xi = pd.DataFrame(xi, columns=self.Q.param_names())
+                xi = pd.DataFrame(xi, columns=self.Q.variable_names())
             case _:
                 raise ValueError(f"There is no method type: {self.method}")
         y_t = self.model.predict(xi, **params)
@@ -417,7 +417,7 @@ class PredictiveModel:
 
         if self.method == "DNN" or self.method == "GBT" or self.method == "LinReg":
             q = self.Q.sample(n_sample)
-            q_df = pd.DataFrame(q, columns=self.Q.param_names())
+            q_df = pd.DataFrame(q, columns=self.Q.variable_names())
             y_predict = self.predict(q_df)
             mean, var = y_predict.mean(axis=0), y_predict.var(axis=0)
         elif self.method == "gPCE":

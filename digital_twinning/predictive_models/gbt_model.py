@@ -177,7 +177,7 @@ class GBTModel:
         '''
 
         self.Q = Q
-        self.cols = self.Q.param_names()
+        self.cols = self.Q.variable_names()
         self.label = QoI
         self.method = gbt_method
         self.model_type = model_type
@@ -1495,7 +1495,7 @@ class GBTModel:
                         "mls:params": str(dist.dist_params),
                     }
                 }
-                for (name, dist) in self.Q.params.items()
+                for (name, dist) in self.Q.variables.items()
             ]
         }
     

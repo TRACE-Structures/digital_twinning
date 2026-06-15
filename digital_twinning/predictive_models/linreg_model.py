@@ -310,7 +310,7 @@ class LinRegModel:
                         "mls:params": str(dist.dist_params),
                     }
                 }
-                for (name, dist) in self.Q.params.items()
+                for (name, dist) in self.Q.variables.items()
             ]
         }
     
