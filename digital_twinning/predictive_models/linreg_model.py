@@ -197,15 +197,15 @@ class LinRegModel:
             Variance of the model outputs.
         '''
 
-        paramset = model_obj.Q
+        variableset = model_obj.Q
         QoI_names = model_obj.QoI_names
 
         problem = {
-            'num_vars': paramset.num_params(), 'names': paramset.param_names(), 'dists': paramset.get_dist_types(), 'bounds': paramset.get_dist_params()
+            'num_vars': variableset.num_variables(), 'names': variableset.variable_names(), 'dists': variableset.get_dist_types(), 'bounds': variableset.get_dist_params()
             } 
         
-        d = paramset.num_params()
-        q = paramset.sample(method='Sobol_saltelli', n=8192) # saltelli working only for uniform distribution # N * (2D + 2)
+        d = variableset.num_variables()
+        q = variableset.sample(method='Sobol_saltelli', n=8192) # saltelli working only for uniform distribution # N * (2D + 2)
         y = model_obj.predict(q)
         
         # Run model

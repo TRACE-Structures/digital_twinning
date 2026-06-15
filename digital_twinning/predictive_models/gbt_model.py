@@ -1092,14 +1092,14 @@ class GBTModel:
             Array of variances of the model outputs.
         '''
 
-        paramset = model_obj.Q
+        variableset = model_obj.Q
         QoI_names = model_obj.QoI_names
         problem = {
-            'num_vars': paramset.num_params(), 'names': paramset.param_names(), 'dists': paramset.get_dist_types(), 'bounds': paramset.get_dist_params()
+            'num_vars': variableset.num_variables(), 'names': variableset.variable_names(), 'dists': variableset.get_dist_types(), 'bounds': variableset.get_dist_params()
             }
-        q = paramset.sample(method='Sobol_saltelli', n=32768) # saltelli working only for uniform distribution
+        q = variableset.sample(method='Sobol_saltelli', n=32768) # saltelli working only for uniform distribution
         # https://salib.readthedocs.io/en/latest/user_guide/advanced.html
-        q_df = pd.DataFrame(q, columns=paramset.param_names())
+        q_df = pd.DataFrame(q, columns=variableset.variable_names())
         y = model_obj.predict(q_df)
         
         # Run model
