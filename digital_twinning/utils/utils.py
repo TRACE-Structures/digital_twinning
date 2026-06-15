@@ -63,11 +63,11 @@ def plot_3Dscatterplots(K, M, Z_prediction, Z_true, n_train=0):
 
     sc1 = ax[0].scatter3D(K.flatten(), M.flatten(), Z_prediction.flatten(), c=Z_prediction.flatten(), cmap='jet', s=10)
     ax[0].set_title('Proxy Surface')
-    ax[0].set_xlim(0.5, 2.5); ax[0].set_ylim(0.5, 2.5); ax[0].set_zlim(-1, 1);
+    ax[0].set_xlim(0.5, 2.5); ax[0].set_ylim(0.5, 2.5); ax[0].set_zlim(-1, 1)
 
     sc2 = ax[1].scatter3D(K.flatten(), M.flatten(), Z_true.flatten(), c=Z_true.flatten(), cmap='jet', s=10)
     ax[1].set_title('True Surface')
-    ax[1].set_xlim(0.5, 2.5); ax[1].set_ylim(0.5, 2.5); ax[1].set_zlim(-1, 1);
+    ax[1].set_xlim(0.5, 2.5); ax[1].set_ylim(0.5, 2.5); ax[1].set_zlim(-1, 1)
     
 
 
@@ -1361,11 +1361,11 @@ def test_paramset(variableset, sample):
             - 'valid' : bool, True if all tests pass
             - 'message' : str, descriptive message '''
     
-    if len(sample.columns) != variableset.num_params():
+    if len(sample.columns) != variableset.num_variables():
         return {"valid": False, "message": "Number of columns in sample must match number of parameters in VariableSet."}
     
-    for param in variableset.params.keys():
-        dist = variableset.params[param]
+    for param in variableset.variables.keys():
+        dist = variableset.variables[param]
         ks_statistic, p_value = stats.kstest(sample[param], dist.cdf)
         if p_value < 0.05:
             return {"valid": False, "message": f"Sample does not match the distribution of variable {param}."}

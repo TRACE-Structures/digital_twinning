@@ -78,7 +78,7 @@ def plot_shap_values(model, q=None, param_name=None):
         Parameters
         ----------
         model : object
-            Model object with .model.explainer, .Q.param_names(), .QoI_names, and optionally .X_train.
+            Model object with .model.explainer, .Q.variable_names(), .QoI_names, and optionally .X_train.
         q : pandas.DataFrame or None, optional
             Input data for SHAP computation. If None, uses model.X_train.
         param_name : str or None, optional
@@ -92,7 +92,7 @@ def plot_shap_values(model, q=None, param_name=None):
     if q is None:
         q = model.X_train
     else:
-        q = pd.DataFrame(q, columns=model.Q.param_names())
+        q = pd.DataFrame(q, columns=model.Q.variable_names())
     
     xi = q
     explainer = model.model.explainer
@@ -140,7 +140,7 @@ def plot_MCMC_results(Q, sampler, num_param, nwalkers, scale):
     param_bounds = Q.get_bounds()
 
     post_samples = sampler.get_chain(flat = True)
-    h = sns.PairGrid(pd.DataFrame(post_samples[:, :], columns = Q.param_names()))
+    h = sns.PairGrid(pd.DataFrame(post_samples[:, :], columns = Q.variable_names()))
     h.map_diag(plt.hist, color="#2f779dff", bins = 15, linewidth = 0.3)
     h.map_upper(sns.scatterplot, color = "#2f779dff", s = 10, linewidth=0.3)
     h.map_lower(sns.scatterplot, color = "#2f779dff", s = 10, linewidth=0.3)
@@ -180,7 +180,7 @@ def MCMC_run_and_plot(nwalkers, niter, nburn, scale, manager):
             Runs MCMC and displays posterior plots. '''
     
     Q = manager.Q
-    num_param = Q.num_params()
+    num_param = Q.num_variables()
     pdf_func = manager.pdf_func
 
     p0 = Q.sample(nwalkers)
