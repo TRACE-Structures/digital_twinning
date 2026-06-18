@@ -7,6 +7,7 @@ from SALib.analyze import sobol
 from sklearn.linear_model import LinearRegression
 from scipy.stats import kendalltau, pearsonr, spearmanr
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+import json
 
 class LinRegModel:
     '''
@@ -270,50 +271,50 @@ class LinRegModel:
         return shap_values
 
     def to_jsonld(self, model_id: str):
-        '''
-        Serializes the model to JSON-LD format.
-
-        Parameters
-        ----------
-        model_id : str
-            Unique identifier for the model.
-
-        Returns
-        -------
-        jsonld : dict
-            JSON-LD representation of the model.
-        '''
 
         jsonld = {
+
             "@context": {
-                "mls": "https://ml-schema.github.io/documentation/mls.html",
+                "mls": "http://www.w3.org/ns/mls#",
                 "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
             },
 
-            "@id": f"https://example.org/models/{model_id}",
+            "@id": f"urn:model:{model_id}",
             "@type": "mls:Model",
-            "mls:implementsAlgorithm": {
-                "@id": "https://en.wikipedia.org/wiki/Linear_regression",
-                "@type": "mls:Algorithm",
-                "rdfs:label": "Linear Regression"
-            },
 
-            "mls:hasHyperParameter": [],
+            "mls:specifiedBy": {
+                "@id": f"urn:implementation:{model_id}",
+                "@type": "mls:Implementation",
+
+                "mls:implements": {
+                    "@id": "https://www.wikidata.org/entity/Q208042",
+                    "@type": "mls:Algorithm",
+                    "rdfs:label": "Linear Regression"
+                },
+
+                "mls:hasHyperParameter": []
+            },
 
             "mls:hasInput": [
                 {
                     "@type": "mls:Feature",
-                    "mls:featureName": name,
-                    "mls:hasDistribution": {
-                        "@type": "mls:Distribution",
-                        "mls:distributionType": dist.get_type(),
-                        "mls:params": str(dist.dist_params),
+
+                    "rdfs:label": name,
+
+                    "mls:hasQuality": {
+                        "@type": "mls:FeatureCharacteristic",
+
+                        "distributionType": dist.get_type(),
+                        "distributionParameters": dist.dist_params
                     }
                 }
-                for (name, dist) in self.Q.variables.items()
+                for name, dist in self.Q.params.items()
             ]
         }
-    
+
+        with open(f'{model_id}.json', 'w') as f:
+            json.dump(jsonld, f)
+
         return jsonld
     
     def __getstate__(self):
