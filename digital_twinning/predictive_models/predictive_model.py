@@ -1210,7 +1210,7 @@ class DataDrivenModel(PredictiveModel):
         '''
 
         if name is not None:
-            name = name + ".ddm"
+            name = name + ".ddpm"
             if path is not None:
                 name = os.path.join(path, name)
             with open(name, 'wb') as file:

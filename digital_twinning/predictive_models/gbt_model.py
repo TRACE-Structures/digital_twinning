@@ -1500,3 +1500,36 @@ class GBTModel:
         }
     
         return jsonld
+    
+    def __getstate__(self):
+        '''
+        Prepares the instance state for pickling by removing large training data attributes.
+
+        Returns:
+        -------
+        state : dict
+            The instance state dictionary without large training data attributes.
+        '''
+
+        # Create a copy of the instance dictionary
+        state = self.__dict__.copy()
+        
+        # Remove large training data attributes before pickling
+        for attr in ['explainer']:
+            if attr in state:
+                del state[attr]
+        
+        return state
+    
+    def __setstate__(self, state):
+        '''
+        Restores the instance state from the pickled state dictionary.
+
+        Parameters:
+        -----------
+        state : dict
+            The instance state dictionary to restore.
+        '''
+
+        # Restore the instance state
+        self.__dict__.update(state)
