@@ -1046,12 +1046,14 @@ class GBTModel:
             print(feats_with_top_n_mixed_imp)
         return shap_values, local_av_imp, local_max_imp, feats_with_top_n_mixed_imp
     
-    def get_shap_values(self, q, forced=False, explainer_type="treeexplainer"):
+    def get_shap_values(self, predict_fn, q, forced=False, explainer_type="treeexplainer"):
         '''
         Computes SHAP values for the given query points.
 
         Parameters:
         -----------
+        predict_fn : callable
+            Prediction function for the model.
         q : pd.DataFrame
             Query points for which SHAP values are computed.
         forced : bool, optional
@@ -1065,10 +1067,16 @@ class GBTModel:
             Array of SHAP values.
         '''
 
+        if isinstance(q, pd.DataFrame):
+            q = q.apply(pd.to_numeric, errors='coerce').fillna(0)
+
         if explainer_type == "treeexplainer":
             if hasattr(self, 'explainer') == False or forced == True:
-                explainer = shap.TreeExplainer(self.model)
-                self.explainer = explainer
+                try:
+                    self.explainer = shap.TreeExplainer(self.model)
+                except (ValueError, Exception):
+                    background = q.iloc[:min(50, len(q))]
+                    self.explainer = shap.KernelExplainer(predict_fn, background)
         shap_values = self.explainer(q)
         return shap_values
     
@@ -1432,7 +1440,7 @@ class GBTModel:
             coef_df = pd.DataFrame({"name": cols, "value": lreg_model.coef_[0]}).sort_values(by='value')
         return intercept_df.append(coef_df, ignore_index=True)
 
-     def to_jsonld(self, model_id: str):
+    def to_jsonld(self, model_id: str):
 
         hyperparameters = []
         hyperparameter_settings = []
