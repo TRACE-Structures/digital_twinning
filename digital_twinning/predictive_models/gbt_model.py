@@ -22,6 +22,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import ElasticNet
 from digital_twinning.utils.gbt_plot_utils import *
 from SALib.analyze import sobol
+import json
 
 
 class GBTModel:
@@ -1431,74 +1432,76 @@ class GBTModel:
             coef_df = pd.DataFrame({"name": cols, "value": lreg_model.coef_[0]}).sort_values(by='value')
         return intercept_df.append(coef_df, ignore_index=True)
 
-    def to_jsonld(self, model_id: str):
-        '''
-        Exports the GBT model metadata to JSON-LD format.
-        
-        Parameters:
-        -----------
-        model_id : str
-            Unique identifier for the model.
+     def to_jsonld(self, model_id: str):
 
-        Returns:
-        -------
-        jsonld : dict
-            JSON-LD representation of the model metadata.
-        '''
+        hyperparameters = []
+        hyperparameter_settings = []
 
-        match self.method:
-            case 'scikit':
-                algorithm = 'https://en.wikipedia.org/wiki/Gradient_boosting'
-            case 'xgboost':
-                algorithm = 'https://en.wikipedia.org/wiki/XGBoost'
-            case 'catboost':
-                algorithm = 'https://en.wikipedia.org/wiki/CatBoost'
-            case 'lightgbm':
-                algorithm = 'https://en.wikipedia.org/wiki/LightGBM'
-            case 'ElasticNet':
-                algorithm = 'https://en.wikipedia.org/wiki/Elastic_net_regularization'
-            case 'log_reg':
-                algorithm = 'https://en.wikipedia.org/wiki/Logistic_regression'
+        for name, value in self.hyper_params.items():
+
+            hyper_id = f"#{name}"
+
+            hyperparameters.append({
+                "@id": hyper_id,
+                "@type": "mls:HyperParameter",
+                "rdfs:label": name
+            })
+
+            hyperparameter_settings.append({
+                "@id": f"#{name}_setting",
+                "@type": "mls:HyperParameterSetting",
+                "mls:specifiedBy": {
+                    "@id": hyper_id
+                },
+                "mls:hasValue": value
+            })
 
         jsonld = {
 
             "@context": {
-                "mls": "https://ml-schema.github.io/documentation/mls.html",
+                "mls": "http://www.w3.org/ns/mls#",
                 "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
             },
 
-            "@id": f"https://example.org/models/{model_id}",
+            "@id": f"urn:model:{model_id}",
             "@type": "mls:Model",
-            "mls:implementsAlgorithm": {
-                "@id": algorithm,
-                "@type": "mls:Algorithm",
-                "rdfs:label": self.method,
+
+            "mls:specifiedBy": {
+                "@id": f"urn:implementation:{model_id}",
+                "@type": "mls:Implementation",
+
+                "mls:implements": {
+                    "@id": "https://www.wikidata.org/entity/Q22918957",
+                    "@type": "mls:Algorithm",
+                    "rdfs:label": "XGBoost"
+                },
+
+                "mls:hasHyperParameter": hyperparameters
             },
 
-            "mls:hasHyperParameter": [
-                {
-                    "@type": "mls:HyperParameterSetting",
-                    "mls:hasParameterName": name,
-                    "mls:hasParameterValue": str(value).lower() if isinstance(value, bool) else str(value)
-                }
-                for name, value in self.hyper_params.items()
-
-            ],
+            "mls:hasPart": hyperparameter_settings,
 
             "mls:hasInput": [
                 {
                     "@type": "mls:Feature",
-                    "mls:featureName": name,
-                    "mls:hasDistribution": {
-                        "@type": "mls:Distribution",
-                        "mls:distributionType": dist.get_type(),
-                        "mls:params": str(dist.dist_params),
+
+                    "rdfs:label": name,
+
+                    "mls:hasQuality": {
+                        "@type": "mls:FeatureCharacteristic",
+
+                        "distributionType": dist.get_type(),
+
+                        "distributionParameters": dist.dist_params
                     }
                 }
-                for (name, dist) in self.Q.variables.items()
+                for name, dist in self.Q.params.items()
             ]
         }
-    
+
+        with open(f'{model_id}.json', 'w') as f:
+            json.dump(jsonld, f)
+
         return jsonld
     
     def __getstate__(self):
