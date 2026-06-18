@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import shap
 from SALib.analyze import sobol
+import json
 
 class DNNModel(nn.Module):
     '''
@@ -460,73 +461,57 @@ class DNNModel(nn.Module):
         return shap_values
     
     def to_jsonld(self, model_id=None):
-        '''
-        Serializes the model to JSON-LD format.
 
-        Parameters
-        ----------
-        model_id : str
-            Unique identifier for the model.
+        hyperparameters = []
+        hyperparameter_settings = []
 
-        Returns
-        -------
-        jsonld : dict
-            JSON-LD representation of the model.
-        '''
+        for name, value in self.hyper_params.items():
+
+            hyper_id = f"#{name}"
+
+            hyperparameters.append({
+                "@id": hyper_id,
+                "@type": "mls:HyperParameter",
+                "rdfs:label": name
+            })
+
+            hyperparameter_settings.append({
+                "@id": f"#{name}_setting",
+                "@type": "mls:HyperParameterSetting",
+                "mls:specifiedBy": {
+                    "@id": hyper_id
+                },
+                "mls:hasValue": value
+            })
 
         jsonld = {
             "@context": {
-                "mls": "https://ml-schema.github.io/documentation/mls.html",
+                "mls": "http://www.w3.org/ns/mls#",
                 "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
             },
 
-            "@id": f"https://example.org/models/{model_id}",
+            "@id": f"urn:model:{model_id}",
             "@type": "mls:Model",
-            "mls:implementsAlgorithm": {
-                "@id": "https://en.wikipedia.org/wiki/Deep_learning",
-                "@type": "mls:Algorithm",
-                "rdfs:label": "Deep Neural Network"
+
+            "mls:specifiedBy": {
+                "@id": f"urn:implementation:{model_id}",
+                "@type": "mls:Implementation",
+
+                "mls:implements": {
+                    "@id": "https://www.wikidata.org/wiki/Q192776",
+                    "@type": "mls:Algorithm",
+                    "rdfs:label": "Deep Neural Network"
+                },
+
+                "mls:hasHyperParameter": hyperparameters
             },
-            "mls:hasHyperParameter": [
-                {
-                    "@type": "mls:HyperParameterSetting",
-                    "mls:hasParameterName": name,
-                    "mls:hasParameterValue": str(value).lower() if isinstance(value, bool) else str(value)
-                }
-                for name, value in self.hyper_params.items()
-            ],
-    
-            "mls:hasPart": [
-                {
-                    "@type": "mls:NeuralNetwork",
-                    "mls:hasLayer": []
-                }
-            ]
+
+            "mls:hasPart": hyperparameter_settings
         }
 
-        layer_list = []
-        index = 0
-        for layer in self.all_layers:
-            if isinstance(layer, nn.Linear):
-                layer_entry = {
-                    "@type": "mls:DenseLayer",
-                    "mls:layerIndex": index,
-                    "mls:units": layer.out_features,
-                    "mls:inputDim": layer.in_features,
-                    "mls:activationFunction": None  # Will be filled by next activation
-                }
-                layer_list.append(layer_entry)
-                index += 1
-            elif isinstance(layer, (nn.ReLU, nn.Tanh, nn.Sigmoid, nn.GELU, nn.Softmax, nn.LeakyReLU)):
-                af = type(layer).__name__.lower()
-                # Fill last layer's activationFunction
-                layer_list[-1]["mls:activationFunction"] = af
-            elif isinstance(layer, nn.Dropout):
-                # Add dropout rate to last layer
-                layer_list[-1]["mls:dropoutRate"] = layer.p
+        with open(f'{model_id}.json', 'w') as f:
+            json.dump(jsonld, f)
 
-        jsonld["mls:hasPart"][0]["mls:hasLayer"] = layer_list
-    
         return jsonld
     
     def __getstate__(self):
