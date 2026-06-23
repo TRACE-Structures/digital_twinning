@@ -1188,7 +1188,7 @@ def get_distribution(X, parameter_idx, verbose=False):
     else:
         return 'Normal'
     
-def get_simparamset_from_data(data, verbose=False):
+def get_variableset_from_data(data, verbose=False):
     ''' Create a VariableSet from data by choosing Uniform or Normal distribution per parameter.
     
         Parameters
@@ -1344,7 +1344,7 @@ class y_scaler():
         return y
 
 
-def test_paramset(variableset, sample):
+def test_variableset(variableset, sample):
     ''' Perform Kolmogorov-Smirnov test between VariableSet distributions and sample data.
     
         Parameters

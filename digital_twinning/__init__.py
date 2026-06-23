@@ -1,4 +1,4 @@
-__version__ = "0.1.13"
+__version__ = "0.1.16"
 
 from .predictive_models import *
 from .utils import *
