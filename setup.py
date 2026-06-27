@@ -3,7 +3,7 @@ from pathlib import Path
 
 setup(
     name='digital_twinning',
-    version='0.1.16',
+    version='0.1.17',
     author='András Urbanics, Áron Friedman, Bence Popovics, Emese Vastag, Noémi Friedman',
     author_email='popbence@hun-ren.sztaki.hu',
     description='A comprehensive package for digital twin model updating and predictive modeling using machine learning and uncertainty quantification techniques',
@@ -30,7 +30,8 @@ setup(
         'scikit-learn',
         'torch',
         'uncertain-variables',
-        'xgboost'
+        'xgboost',
+        'pyuff'
     ],
     classifiers=[
         'Programming Language :: Python :: 3',
