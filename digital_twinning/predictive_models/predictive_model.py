@@ -759,7 +759,7 @@ class PredictiveModel:
         self.partial_var_df, self.sobol_index_df, self.total_var = partial_var_df, sobol_index_df, total_var
         return partial_var_df, sobol_index_df
             
-    async def get_shap_values(self, q, mean=False, sample_size_from_q=100):
+    async def get_shap_values(self, q, mean=False, sample_size_from_q=100, silent=False):
         '''
         Computes SHAP values for the model predictions.
 
@@ -788,7 +788,7 @@ class PredictiveModel:
             else:
                 print(f'Message: sample size for shap values is set to {sample_size_from_q}.')
             q = q.iloc[:sample_size_from_q]
-        shap_values = await asyncio.to_thread(self.model.get_shap_values, self.predict, q)
+        shap_values = await asyncio.to_thread(self.model.get_shap_values, self.predict, q, silent=silent)
         self.shap_values = shap_values
         if mean:
             mean_shap_values = np.mean(np.abs(shap_values.values), axis=0)
@@ -796,7 +796,7 @@ class PredictiveModel:
             return mean_shap_values_df
         return shap_values
     
-    async def subtract_effects(self, q, QoI, subtracted_params):
+    async def subtract_effects(self, q, QoI, subtracted_params, silent=False):
         '''
         Subtracts the effects of specified parameters from the QoI using SHAP values.
 
@@ -816,7 +816,7 @@ class PredictiveModel:
         '''
 
         QoI = pd.DataFrame(QoI, columns=self.QoI_names)
-        shap_values = await self.get_shap_values(q, mean=False, sample_size_from_q='all')
+        shap_values = await self.get_shap_values(q, mean=False, sample_size_from_q='all', silent=silent)
         columns = q.columns.tolist()
         indices = []
         for x in subtracted_params:
@@ -865,7 +865,7 @@ class PredictiveModel:
         return error_ratio, problematic_rows
     
     
-    async def plot_subtract_effects_and_alert(self, X_train, y_train, q, QoI, subtracted_params, threshold_ratio=0.1, xticks=True):
+    async def plot_subtract_effects_and_alert(self, X_train, y_train, q, QoI, subtracted_params, threshold_ratio=0.1, xticks=True, silent=False):
         '''
         Plots the effects after subtracting specified parameter effects and checks for alerts.
 
@@ -905,7 +905,7 @@ class PredictiveModel:
         '''
 
         alert = False
-        remained_train_effects = await self.subtract_effects(X_train, pd.DataFrame(y_train), subtracted_params)
+        remained_train_effects = await self.subtract_effects(X_train, pd.DataFrame(y_train), subtracted_params, silent=silent)
         QoI_names = remained_train_effects.columns
         reference_statistics = round(remained_train_effects.describe().T, 4).reindex(columns=['25%', '50%', '75%', 'count', 'max', 'mean', 'min', 'std'])
         remained_train_effects = remained_train_effects.values
@@ -916,7 +916,7 @@ class PredictiveModel:
         mean_train = higher_bound - magnitudes / 2
         margin = magnitudes * threshold_ratio
 
-        remained_measured_effects = await self.subtract_effects(q, QoI, subtracted_params)
+        remained_measured_effects = await self.subtract_effects(q, QoI, subtracted_params, silent=silent)
         monitoring_statistics = round(remained_measured_effects.describe().T, 4).reindex(columns=['25%', '50%', '75%', 'count', 'max', 'mean', 'min', 'std'])
         remained_measured_effects = remained_measured_effects.values
 
@@ -965,7 +965,7 @@ class PredictiveModel:
         fig = utils.plot_sobol_sensitivity(self.sobol_index_df, y_train, **kwargs)
         return fig
     
-    async def plot_shap_single_waterfall(self, X_test, **kwargs):
+    async def plot_shap_single_waterfall(self, X_test, silent=False, **kwargs):
         '''
         Plots a single SHAP waterfall plot for the model predictions.
 
@@ -983,12 +983,12 @@ class PredictiveModel:
         '''
 
         if hasattr(self, 'shap_values') == False:
-            self.shap_values = await self.get_shap_values(X_test)
+            self.shap_values = await self.get_shap_values(X_test, silent=silent)
             print('The SHAP values have been computed automatically!')
         fig = utils.plot_shap_single_waterfall(self, **kwargs)
         return fig
     
-    async def plot_shap_multiple_waterfalls(self, X_test, **kwargs):
+    async def plot_shap_multiple_waterfalls(self, X_test, silent=False, **kwargs):
         '''
         Plots multiple SHAP waterfall plots for the model predictions.
 
@@ -1006,12 +1006,12 @@ class PredictiveModel:
         '''
 
         if hasattr(self, 'shap_values') == False:
-            self.shap_values = await self.get_shap_values(X_test)
+            self.shap_values = await self.get_shap_values(X_test, silent=silent)
             print('The SHAP values have been computed automatically!')
         fig = utils.plot_shap_multiple_waterfalls(self, **kwargs)
         return fig
     
-    async def plot_shap_beeswarm(self, X_test, **kwargs):
+    async def plot_shap_beeswarm(self, X_test, silent=False, **kwargs):
         '''
         Plots a SHAP beeswarm plot for the model predictions.
 
@@ -1029,7 +1029,7 @@ class PredictiveModel:
         '''
 
         if hasattr(self, 'shap_values') == False:
-            self.shap_values = await self.get_shap_values(X_test)
+            self.shap_values = await self.get_shap_values(X_test, silent=silent)
             print('The SHAP values have been computed automatically!')
         fig = utils.plot_shap_beeswarm(self, **kwargs)
         return fig

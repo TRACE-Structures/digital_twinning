@@ -243,7 +243,7 @@ class LinRegModel:
 
         return partial_var_df, sobol_index_df, y_var
     
-    def get_shap_values(self, predict_fn, q, forced=False, explainer_type="kernelexplainer"):
+    def get_shap_values(self, predict_fn, q, forced=False, explainer_type="kernelexplainer", silent=False):
         '''
         Computes SHAP values for model interpretability.
         
@@ -257,6 +257,8 @@ class LinRegModel:
             If True, forces re-computation of the SHAP explainer. Default is False.
         explainer_type : str, optional
             Type of SHAP explainer to use. Default is "kernelexplainer".
+        silent : bool, optional
+            If True, suppresses output during SHAP value computation. Default is False.
         Returns
         -------
         shap_values : array-like
@@ -267,7 +269,7 @@ class LinRegModel:
             if hasattr(self, 'explainer') == False or forced == True:
                 explainer = shap.KernelExplainer(predict_fn, q)
                 self.explainer = explainer
-        shap_values = self.explainer(q)
+        shap_values = self.explainer(q, silent=silent)
         return shap_values
 
     def to_jsonld(self, model_id: str):

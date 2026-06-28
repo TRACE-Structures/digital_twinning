@@ -407,7 +407,7 @@ class DNNModel(nn.Module):
 
         return partial_var_df, sobol_index_df, y_var
     
-    def get_shap_values(self, predict_fn, q, forced=False, explainer_type="kernelexplainer"):
+    def get_shap_values(self, predict_fn, q, forced=False, explainer_type="kernelexplainer", silent=False):
         '''
         Computes SHAP values for model interpretability.
 
@@ -452,12 +452,12 @@ class DNNModel(nn.Module):
                 self.explainer = explainer
                 #shap_values = explainer.shap_values(xi)
             self.eval()
-            shap_values = self.explainer(xi)
+            shap_values = self.explainer(xi, silent=silent)
         elif explainer_type == "kernelexplainer":
             if hasattr(self, 'explainer') == False or forced == True:
                 explainer = shap.KernelExplainer(predict_fn, q)
                 self.explainer = explainer
-            shap_values = self.explainer(q)
+            shap_values = self.explainer(q, silent=silent)
         return shap_values
     
     def to_jsonld(self, model_id=None):

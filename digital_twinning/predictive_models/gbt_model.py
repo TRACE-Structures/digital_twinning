@@ -1046,7 +1046,7 @@ class GBTModel:
             print(feats_with_top_n_mixed_imp)
         return shap_values, local_av_imp, local_max_imp, feats_with_top_n_mixed_imp
     
-    def get_shap_values(self, predict_fn, q, forced=False, explainer_type="treeexplainer"):
+    def get_shap_values(self, predict_fn, q, forced=False, explainer_type="treeexplainer", silent=False):
         '''
         Computes SHAP values for the given query points.
 
@@ -1060,6 +1060,8 @@ class GBTModel:
             Whether to force re-computation of the explainer (default is False).
         explainer_type : str, optional
             Type of SHAP explainer to use (default is "treeexplainer").
+        silent : bool, optional
+            Whether to suppress output (default is False).
 
         Returns:
         -------
@@ -1077,7 +1079,7 @@ class GBTModel:
                 except (ValueError, Exception):
                     background = q.iloc[:min(50, len(q))]
                     self.explainer = shap.KernelExplainer(predict_fn, background)
-        shap_values = self.explainer(q)
+        shap_values = self.explainer(q, silent=silent)
         return shap_values
     
     def compute_partial_vars(self, model_obj, max_index):

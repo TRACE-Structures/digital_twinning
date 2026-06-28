@@ -232,7 +232,7 @@ class JointManager:
         logp = self.E.logpdf(d)
         return logp
     
-    def update(self, y_list, sigmas, nwalkers=150, nburn=100, niter=350, Q_='default', plot_samples=False):
+    def update(self, y_list, sigmas, nwalkers=150, nburn=100, niter=350, Q_='default', plot_samples=False, progress=True):
         """ Perform MCMC update with observed data
 
             Parameters
@@ -288,11 +288,11 @@ class JointManager:
         start_time = time.time()
 
         print('Burning period')
-        state = sampler.run_mcmc(p0, nburn, progress = True)
+        state = sampler.run_mcmc(p0, nburn, progress = progress)
         sampler.reset()
 
         print('MCMC running')
-        sampler.run_mcmc(state, niter, progress = True)
+        sampler.run_mcmc(state, niter, progress = progress)
     
         print("--- %s seconds ---" % (time.time() - start_time))
         self.sampler = sampler

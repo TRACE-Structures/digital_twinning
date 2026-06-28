@@ -5,9 +5,6 @@ import time
 import pandas as pd
 import numpy as np
 from digital_twinning.utils import utils
-from tqdm import tqdm
-import sys
-
 
 class DigitalTwin:
     """ Digital Twin class for model updating using MCMC
@@ -93,7 +90,7 @@ class DigitalTwin:
             logprob = self.loglikelihood(q, self.y_m) + self.Q_.logpdf(q)
             return logprob 
         
-    def update(self, y_m, nwalkers=150, nburn=100, niter=350, Q_='default', plot_samples=False, name_pairs=None):
+    def update(self, y_m, nwalkers=150, nburn=100, niter=350, Q_='default', plot_samples=False, name_pairs=None, progress=True):
         """ Update the digital twin using MCMC with given measurements y_m
 
             Parameters
@@ -117,7 +114,9 @@ class DigitalTwin:
                 If True, plot the MCMC samples, by default False
 
             name_pairs : _type_, optional
-                List of tuples defining mapping between model outputs and measurements, by default None """
+                List of tuples defining mapping between model outputs and measurements, by default None
+            progress : bool, optional
+                If True, show progress bar during MCMC sampling, by default True"""
         
         self.Q_ = Q_
         if name_pairs is not None:
@@ -142,20 +141,12 @@ class DigitalTwin:
         sampler = emcee.EnsembleSampler(nwalkers, num_param, self.get_logprob)#, pool=pool)
         start_time = time.time()
 
-        # print('Burning period')
-        state = sampler.run_mcmc(p0, nburn, progress = False)
+        print('Burning period')
+        state = sampler.run_mcmc(p0, nburn, progress = progress)
         sampler.reset()
-        with tqdm(total=niter, desc='Burning period', file=sys.stdout) as pbar:
-            for sample in sampler.sample(state, iterations=niter):
-                pbar.update(1)
 
-
-        # print('MCMC running')
-        sampler.run_mcmc(state, niter, progress = False)
-        with tqdm(total=niter, desc='MCMC running', file=sys.stdout) as pbar:
-            for sample in sampler.sample(state, iterations=niter):
-                pbar.update(1)
-
+        print('MCMC running')
+        sampler.run_mcmc(state, niter, progress = progress)
     
         print("--- %s seconds ---" % (time.time() - start_time))
         self.sampler = sampler
