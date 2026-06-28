@@ -965,7 +965,7 @@ class PredictiveModel:
         fig = utils.plot_sobol_sensitivity(self.sobol_index_df, y_train, **kwargs)
         return fig
     
-    async def plot_shap_single_waterfall(self, X_test, silent=False, **kwargs):
+    async def plot_shap_single_waterfall(self, X_test, silent, **kwargs):
         '''
         Plots a single SHAP waterfall plot for the model predictions.
 
@@ -988,7 +988,7 @@ class PredictiveModel:
         fig = utils.plot_shap_single_waterfall(self, **kwargs)
         return fig
     
-    async def plot_shap_multiple_waterfalls(self, X_test, silent=False, **kwargs):
+    async def plot_shap_multiple_waterfalls(self, X_test, silent, **kwargs):
         '''
         Plots multiple SHAP waterfall plots for the model predictions.
 
@@ -1011,7 +1011,7 @@ class PredictiveModel:
         fig = utils.plot_shap_multiple_waterfalls(self, **kwargs)
         return fig
     
-    async def plot_shap_beeswarm(self, X_test, silent=False, **kwargs):
+    async def plot_shap_beeswarm(self, X_test, silent, **kwargs):
         '''
         Plots a SHAP beeswarm plot for the model predictions.
 
