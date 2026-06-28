@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 from digital_twinning.utils import utils
 from tqdm import tqdm
+import sys
 
 
 class DigitalTwin:
@@ -141,17 +142,17 @@ class DigitalTwin:
         sampler = emcee.EnsembleSampler(nwalkers, num_param, self.get_logprob)#, pool=pool)
         start_time = time.time()
 
-        print('Burning period')
+        # print('Burning period')
         state = sampler.run_mcmc(p0, nburn, progress = False)
         sampler.reset()
-        with tqdm(total=niter, desc='Burning in') as pbar:
+        with tqdm(total=niter, desc='Burning period', file=sys.stdout) as pbar:
             for sample in sampler.sample(state, iterations=niter):
                 pbar.update(1)
 
 
-        print('MCMC running')
+        # print('MCMC running')
         sampler.run_mcmc(state, niter, progress = False)
-        with tqdm(total=niter, desc='MCMC') as pbar:
+        with tqdm(total=niter, desc='MCMC running', file=sys.stdout) as pbar:
             for sample in sampler.sample(state, iterations=niter):
                 pbar.update(1)
 
