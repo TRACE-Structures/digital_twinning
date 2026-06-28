@@ -985,7 +985,7 @@ class PredictiveModel:
         if hasattr(self, 'shap_values') == False:
             self.shap_values = await self.get_shap_values(X_test, silent=silent)
             print('The SHAP values have been computed automatically!')
-        fig = utils.plot_shap_single_waterfall(self, **kwargs)
+        fig = utils.plot_shap_single_waterfall(self, silent, **kwargs)
         return fig
     
     async def plot_shap_multiple_waterfalls(self, X_test, silent, **kwargs):
@@ -1008,7 +1008,7 @@ class PredictiveModel:
         if hasattr(self, 'shap_values') == False:
             self.shap_values = await self.get_shap_values(X_test, silent=silent)
             print('The SHAP values have been computed automatically!')
-        fig = utils.plot_shap_multiple_waterfalls(self, **kwargs)
+        fig = utils.plot_shap_multiple_waterfalls(self, silent, **kwargs)
         return fig
     
     async def plot_shap_beeswarm(self, X_test, silent, **kwargs):
@@ -1031,7 +1031,7 @@ class PredictiveModel:
         if hasattr(self, 'shap_values') == False:
             self.shap_values = await self.get_shap_values(X_test, silent=silent)
             print('The SHAP values have been computed automatically!')
-        fig = utils.plot_shap_beeswarm(self, **kwargs)
+        fig = utils.plot_shap_beeswarm(self, silent, **kwargs)
         return fig
        
     async def plot_effects(self, effects, xticks=True):

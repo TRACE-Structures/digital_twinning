@@ -169,7 +169,7 @@ def plot_sobol_sensitivity(sobol_index, y, param_name=None):
     return fig
 
 
-def plot_shap_single_waterfall(model, q, param_name, silent=False):
+def plot_shap_single_waterfall(silent, model, q, param_name):
     ''' SHAP waterfall plot for an individual prediction.
 
         Parameters
@@ -266,7 +266,7 @@ def plot_shap_single_waterfall(model, q, param_name, silent=False):
 
     return fig
 
-def plot_shap_multiple_waterfalls(model, q, param_name=None, show_param_values=False, silent=False):
+def plot_shap_multiple_waterfalls(silent, model, q, param_name=None, show_param_values=False):
     ''' Plot SHAP waterfall plots for multiple predictions or quantities of interest.
 
         Parameters
@@ -413,7 +413,7 @@ def plot_shap_multiple_waterfalls(model, q, param_name=None, show_param_values=F
 
     return fig
 
-def plot_shap_beeswarm(model, param_name, q=None, silent=False):
+def plot_shap_beeswarm(silent, model, param_name, q=None):
     ''' Generate SHAP beeswarm plot showing feature effects on a QoI.
 
         Parameters
