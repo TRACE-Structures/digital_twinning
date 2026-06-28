@@ -169,7 +169,7 @@ def plot_sobol_sensitivity(sobol_index, y, param_name=None):
     return fig
 
 
-def plot_shap_single_waterfall(model, q, param_name):
+def plot_shap_single_waterfall(model, q, param_name, silent=False):
     ''' SHAP waterfall plot for an individual prediction.
 
         Parameters
@@ -190,7 +190,7 @@ def plot_shap_single_waterfall(model, q, param_name):
         q = pd.DataFrame([q], columns=model.Q.variable_names())
             
     explainer = model.model.explainer
-    shap_values = explainer(q)
+    shap_values = explainer(q, silent=silent)
     labels = model.Q.variable_names()
     param_index = model.QoI_names.index(param_name)
     values = shap_values[0, :, param_index].data
@@ -266,7 +266,7 @@ def plot_shap_single_waterfall(model, q, param_name):
 
     return fig
 
-def plot_shap_multiple_waterfalls(model, q, param_name=None, show_param_values=False):
+def plot_shap_multiple_waterfalls(model, q, param_name=None, show_param_values=False, silent=False):
     ''' Plot SHAP waterfall plots for multiple predictions or quantities of interest.
 
         Parameters
@@ -289,7 +289,7 @@ def plot_shap_multiple_waterfalls(model, q, param_name=None, show_param_values=F
         q = pd.DataFrame([q], columns=model.Q.variable_names())
 
     explainer = model.model.explainer
-    shap_values = explainer(q)
+    shap_values = explainer(q, silent=silent)
     
     labels = model.Q.variable_names()
     QoI_names = model.QoI_names
@@ -413,7 +413,7 @@ def plot_shap_multiple_waterfalls(model, q, param_name=None, show_param_values=F
 
     return fig
 
-def plot_shap_beeswarm(model, param_name, q=None):
+def plot_shap_beeswarm(model, param_name, q=None, silent=False):
     ''' Generate SHAP beeswarm plot showing feature effects on a QoI.
 
         Parameters
@@ -432,7 +432,7 @@ def plot_shap_beeswarm(model, param_name, q=None):
     
     if q is not None:
         explainer = model.model.explainer
-        shap_values = explainer(q)
+        shap_values = explainer(q, silent=silent)
     else:
         shap_values = model.shap_values
 
