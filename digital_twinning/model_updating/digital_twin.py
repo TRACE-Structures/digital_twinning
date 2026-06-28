@@ -5,6 +5,8 @@ import time
 import pandas as pd
 import numpy as np
 from digital_twinning.utils import utils
+from tqdm import tqdm
+
 
 class DigitalTwin:
     """ Digital Twin class for model updating using MCMC
@@ -140,11 +142,19 @@ class DigitalTwin:
         start_time = time.time()
 
         print('Burning period')
-        state = sampler.run_mcmc(p0, nburn, progress = True)
+        state = sampler.run_mcmc(p0, nburn, progress = False)
         sampler.reset()
+        with tqdm(total=niter, desc='Burning in') as pbar:
+            for sample in sampler.sample(state, iterations=niter):
+                pbar.update(1)
+
 
         print('MCMC running')
-        sampler.run_mcmc(state, niter, progress = True)
+        sampler.run_mcmc(state, niter, progress = False)
+        with tqdm(total=niter, desc='MCMC') as pbar:
+            for sample in sampler.sample(state, iterations=niter):
+                pbar.update(1)
+
     
         print("--- %s seconds ---" % (time.time() - start_time))
         self.sampler = sampler
