@@ -23,6 +23,7 @@ from sklearn.linear_model import ElasticNet
 from digital_twinning.utils.gbt_plot_utils import *
 from SALib.analyze import sobol
 import json
+import datetime
 
 
 class GBTModel:
@@ -1442,23 +1443,26 @@ class GBTModel:
             coef_df = pd.DataFrame({"name": cols, "value": lreg_model.coef_[0]}).sort_values(by='value')
         return intercept_df.append(coef_df, ignore_index=True)
 
-    def to_jsonld(self, model_id: str):
+    def to_jsonld(self, model_id=None, building_did=None, building_ual=None, name=None, doc_type=None, description=None):
 
         hyperparameters = []
         hyperparameter_settings = []
 
-        for name, value in self.hyper_params.items():
+        for hp_name, value in self.hyper_params.items():
 
-            hyper_id = f"#{name}"
+            if value is None:
+                continue
+
+            hyper_id = f"#{hp_name}"
 
             hyperparameters.append({
                 "@id": hyper_id,
                 "@type": "mls:HyperParameter",
-                "rdfs:label": name
+                "rdfs:label": hp_name
             })
 
             hyperparameter_settings.append({
-                "@id": f"#{name}_setting",
+                "@id": f"#{hp_name}_setting",
                 "@type": "mls:HyperParameterSetting",
                 "mls:specifiedBy": {
                     "@id": hyper_id
@@ -1466,51 +1470,81 @@ class GBTModel:
                 "mls:hasValue": value
             })
 
-        jsonld = {
+        mls_spec = {
+            "@id": f"urn:implementation:{model_id}",
+            "@type": "mls:Implementation",
 
-            "@context": {
-                "mls": "http://www.w3.org/ns/mls#",
-                "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+            "mls:implements": {
+                "@id": "https://www.wikidata.org/entity/Q22918957",
+                "@type": "mls:Algorithm",
+                "rdfs:label": "XGBoost"
             },
 
-            "@id": f"urn:model:{model_id}",
-            "@type": "mls:Model",
-
-            "mls:specifiedBy": {
-                "@id": f"urn:implementation:{model_id}",
-                "@type": "mls:Implementation",
-
-                "mls:implements": {
-                    "@id": "https://www.wikidata.org/entity/Q22918957",
-                    "@type": "mls:Algorithm",
-                    "rdfs:label": "XGBoost"
-                },
-
-                "mls:hasHyperParameter": hyperparameters
-            },
-
-            "mls:hasPart": hyperparameter_settings,
-
-            "mls:hasInput": [
-                {
-                    "@type": "mls:Feature",
-
-                    "rdfs:label": name,
-
-                    "mls:hasQuality": {
-                        "@type": "mls:FeatureCharacteristic",
-
-                        "distributionType": dist.get_type(),
-
-                        "distributionParameters": dist.dist_params
-                    }
-                }
-                for name, dist in self.Q.params.items()
-            ]
+            "mls:hasHyperParameter": hyperparameters
         }
 
-        with open(f'{model_id}.json', 'w') as f:
-            json.dump(jsonld, f)
+        mls_inputs = [
+            {
+                "@type": "mls:Feature",
+
+                "rdfs:label": feat_name,
+
+                "mls:hasQuality": {
+                    "@type": "mls:FeatureCharacteristic",
+
+                    "distributionType": dist.get_dist_type(),
+
+                    "distributionParameters": dist.get_dist_params()
+                }
+            }
+            for feat_name, dist in self.Q.get_variables().items()
+        ]
+
+        qoi_labels = self.label if isinstance(self.label, list) else [self.label]
+        mls_outputs = [{"@type": "mls:Feature", "rdfs:label": lbl} for lbl in qoi_labels]
+
+        if building_did is not None:
+            jsonld = {
+                "@context": {
+                    "schema": "https://schema.org/",
+                    "dcterms": "http://purl.org/dc/terms/",
+                    "dkg": "https://origintrail.io/ontology/",
+                    "mls": "http://www.w3.org/ns/mls#",
+                    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+                },
+
+                "@id": model_id,
+                "@type": "schema:Dataset",
+
+                "schema:name": name,
+                "dcterms:type": doc_type,
+                "schema:description": description,
+                "dcterms:subject": self.model_type,
+                "schema:hasPart": {"@id": building_did, "dkg:ual": building_ual},
+                "dcterms:created": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+
+                "mls:specifiedBy": mls_spec,
+                "mls:hasPart": hyperparameter_settings,
+                "mls:hasInput": mls_inputs,
+                "mls:hasOutput": mls_outputs
+            }
+        else:
+            jsonld = {
+                "@context": {
+                    "dcterms": "http://purl.org/dc/terms/",
+                    "mls": "http://www.w3.org/ns/mls#",
+                    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+                },
+
+                "@id": f"urn:model:{model_id}",
+                "@type": "mls:Model",
+                "dcterms:subject": self.model_type,
+
+                "mls:specifiedBy": mls_spec,
+                "mls:hasPart": hyperparameter_settings,
+                "mls:hasInput": mls_inputs,
+                "mls:hasOutput": mls_outputs
+            }
 
         return jsonld
     

@@ -8,6 +8,7 @@ from sklearn.linear_model import LinearRegression
 from scipy.stats import kendalltau, pearsonr, spearmanr
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import json
+import datetime
 
 class LinRegModel:
     '''
@@ -272,50 +273,76 @@ class LinRegModel:
         shap_values = self.explainer(q, silent=silent)
         return shap_values
 
-    def to_jsonld(self, model_id: str):
+    def to_jsonld(self, model_id=None, building_did=None, building_ual=None, name=None, doc_type=None, description=None):
 
-        jsonld = {
+        mls_spec = {
+            "@id": f"urn:implementation:{model_id}",
+            "@type": "mls:Implementation",
 
-            "@context": {
-                "mls": "http://www.w3.org/ns/mls#",
-                "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+            "mls:implements": {
+                "@id": "https://www.wikidata.org/entity/Q208042",
+                "@type": "mls:Algorithm",
+                "rdfs:label": "Linear Regression"
             },
 
-            "@id": f"urn:model:{model_id}",
-            "@type": "mls:Model",
-
-            "mls:specifiedBy": {
-                "@id": f"urn:implementation:{model_id}",
-                "@type": "mls:Implementation",
-
-                "mls:implements": {
-                    "@id": "https://www.wikidata.org/entity/Q208042",
-                    "@type": "mls:Algorithm",
-                    "rdfs:label": "Linear Regression"
-                },
-
-                "mls:hasHyperParameter": []
-            },
-
-            "mls:hasInput": [
-                {
-                    "@type": "mls:Feature",
-
-                    "rdfs:label": name,
-
-                    "mls:hasQuality": {
-                        "@type": "mls:FeatureCharacteristic",
-
-                        "distributionType": dist.get_type(),
-                        "distributionParameters": dist.dist_params
-                    }
-                }
-                for name, dist in self.Q.params.items()
-            ]
+            "mls:hasHyperParameter": []
         }
 
-        with open(f'{model_id}.json', 'w') as f:
-            json.dump(jsonld, f)
+        mls_inputs = [
+            {
+                "@type": "mls:Feature",
+
+                "rdfs:label": feat_name,
+
+                "mls:hasQuality": {
+                    "@type": "mls:FeatureCharacteristic",
+
+                    "distributionType": dist.get_dist_type(),
+                    "distributionParameters": dist.get_dist_params()
+                }
+            }
+            for feat_name, dist in self.Q.get_variables().items()
+        ]
+
+        mls_outputs = [{"@type": "mls:Feature", "rdfs:label": lbl} for lbl in self.QoI_names]
+
+        if building_did is not None:
+            jsonld = {
+                "@context": {
+                    "schema": "https://schema.org/",
+                    "dcterms": "http://purl.org/dc/terms/",
+                    "dkg": "https://origintrail.io/ontology/",
+                    "mls": "http://www.w3.org/ns/mls#",
+                    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+                },
+
+                "@id": model_id,
+                "@type": "schema:Dataset",
+
+                "schema:name": name,
+                "dcterms:type": doc_type,
+                "schema:description": description,
+                "schema:hasPart": {"@id": building_did, "dkg:ual": building_ual},
+                "dcterms:created": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+
+                "mls:specifiedBy": mls_spec,
+                "mls:hasInput": mls_inputs,
+                "mls:hasOutput": mls_outputs
+            }
+        else:
+            jsonld = {
+                "@context": {
+                    "mls": "http://www.w3.org/ns/mls#",
+                    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+                },
+
+                "@id": f"urn:model:{model_id}",
+                "@type": "mls:Model",
+
+                "mls:specifiedBy": mls_spec,
+                "mls:hasInput": mls_inputs,
+                "mls:hasOutput": mls_outputs
+            }
 
         return jsonld
     
