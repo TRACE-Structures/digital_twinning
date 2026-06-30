@@ -1372,3 +1372,35 @@ def test_variableset(variableset, sample):
         
     return {"valid": True, "message": "Correct"}
 
+def dataframe_statistics_to_json(df):
+    """
+    This function takes a pandas DataFrame as input and returns a list of dictionaries containing statistical information for each feature in the DataFrame.
+
+    Parameters:
+    df (pd.DataFrame): The input DataFrame for which statistics are to be calculated.
+
+    Returns:
+    list: A list of dictionaries, where each dictionary contains the feature name, data type, and statistical measures (count, mean, std, min, 25%, 50%, 75%, max) for that feature.
+    """
+
+    desc = df.describe()
+
+    statistics = []
+
+    for feature in desc.columns:
+        statistics.append({
+            "feature": feature,
+            "dtype": str(df[feature].dtype),
+            "statistics": {
+                "count": int(desc.loc["count", feature]),
+                "mean": float(desc.loc["mean", feature]),
+                "std": float(desc.loc["std", feature]),
+                "min": float(desc.loc["min", feature]),
+                "25%": float(desc.loc["25%", feature]),
+                "50%": float(desc.loc["50%", feature]),
+                "75%": float(desc.loc["75%", feature]),
+                "max": float(desc.loc["max", feature]),
+            }
+        })
+
+    return statistics
