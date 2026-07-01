@@ -327,7 +327,6 @@ class LinRegModel:
 
                 "mls:specifiedBy": mls_spec,
                 "mls:hasInput": mls_inputs,
-                "mls:hasOutput": mls_outputs
             }
         else:
             jsonld = {
@@ -341,7 +340,6 @@ class LinRegModel:
 
                 "mls:specifiedBy": mls_spec,
                 "mls:hasInput": mls_inputs,
-                "mls:hasOutput": mls_outputs
             }
 
         return jsonld
