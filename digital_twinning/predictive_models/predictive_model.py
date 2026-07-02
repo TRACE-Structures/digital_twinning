@@ -861,7 +861,7 @@ class PredictiveModel:
             if (np.abs(values[i, :]) > threshold_ratio).any():
                 indexes.append(i)
         error_ratio = len(indexes) / total_errors
-        problematic_rows = pd.DataFrame(values[indexes], columns=errors.columns)
+        problematic_rows = pd.DataFrame(values[indexes], columns=errors.columns, index=indexes)
         return error_ratio, problematic_rows
     
     
