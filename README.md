@@ -4,6 +4,10 @@
 
 A comprehensive Python package for digital twin model updating and predictive modeling using machine learning and uncertainty quantification techniques.
 
+- Website: [https://buildchain.ilab.sztaki.hu/](https://buildchain.ilab.sztaki.hu/)
+- Source code: [https://github.com/TRACE-Structures/digital_twinning](https://github.com/TRACE-Structures/digital_twinning)
+- Bug reports: [https://github.com/TRACE-Structures/digital_twinning/issues](https://github.com/TRACE-Structures/digital_twinning/issues)
+
 ## Overview
 
 The Digital Twinning package provides tools for creating data-driven predictive models and updating them with measurement data using Bayesian inference (MCMC). It combines surrogate modeling, machine learning, and probabilistic model updating for structural health monitoring and digital twin applications.
