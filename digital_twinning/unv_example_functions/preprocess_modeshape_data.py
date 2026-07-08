@@ -132,6 +132,29 @@ def preprocess_weather_data(weather_file, time_column='date'):
     weather_df = weather_df.dropna()
     return weather_df
 
+def preprocess_weather_df(df, time_column='date'):
+    '''
+    Preprocesses the weather data from a DataFrame.
+
+    Parameters:
+    -----------
+        df: pd.DataFrame
+            weather DataFrame
+
+    Returns:
+    --------
+        weather_df: pd.DataFrame
+            preprocessed weather DataFrame
+    '''
+    weather_df = df.copy()
+    if time_column == weather_df.index.name:
+        weather_df = weather_df.reset_index()
+    if time_column in weather_df.columns:
+        weather_df['Datetime'] = pd.to_datetime(weather_df[time_column], utc=True)
+        weather_df = weather_df.drop(columns=[time_column])
+    weather_df = weather_df.dropna()
+    return weather_df
+
 def merge_dataframes(df_modeshapes, df_weather, time_column='Datetime'):
     '''
     Merges mode shape DataFrame with weather DataFrame based on nearest timestamps.
