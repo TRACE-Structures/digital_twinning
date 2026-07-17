@@ -548,6 +548,7 @@ def plot_MCMC(model_obj, X_train, DigitalTwin, nwalkers=None, extra_point=None, 
             Pairplot figure with priors, posteriors, and highlighted points. '''
     
     prior_samples = pd.DataFrame(X_train, columns=model_obj.Q.variable_names())
+
     posterior_samples = (
         pd.DataFrame(model_obj.Q.germ2variable(DigitalTwin.sampler.get_chain(flat=True)), columns=model_obj.Q.variable_names())
         if DigitalTwin else None
