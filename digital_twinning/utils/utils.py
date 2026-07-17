@@ -549,7 +549,7 @@ def plot_MCMC(model_obj, X_train, DigitalTwin, nwalkers=None, extra_point=None, 
     
     prior_samples = pd.DataFrame(X_train, columns=model_obj.Q.variable_names())
     posterior_samples = (
-        pd.DataFrame(DigitalTwin.sampler.get_chain(flat=True), columns=model_obj.Q.variable_names()) 
+        pd.DataFrame(model_obj.Q.germ2variable(DigitalTwin.sampler.get_chain(flat=True)), columns=model_obj.Q.variable_names())
         if DigitalTwin else None
     )
     if extra_point is not None and not isinstance(extra_point, pd.DataFrame):
