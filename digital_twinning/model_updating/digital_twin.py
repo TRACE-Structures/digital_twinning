@@ -4,6 +4,7 @@ import emcee
 import time
 import pandas as pd
 import numpy as np
+import uncertain_variables as uv
 from digital_twinning.utils import utils
 
 class DigitalTwin:
@@ -67,8 +68,18 @@ class DigitalTwin:
         
         self.model = model
         self.E = E
-        self.Q = model.Q
+        self.Q = self.get_Q_germ()
+
+    def get_Q_germ(self):
         
+        Q_germ = uv.VariableSet()
+        variable_names = self.model.Q.variable_names()
+        for i in range(len(variable_names)):
+            name = variable_names[i]
+            dist = self.model.Q.get_variables()[name].get_base_dist()            
+            P = uv.Variable(name, dist)
+            Q_germ.add(P)
+        return Q_germ
         
     def get_logprob(self, q):
         """ Compute the log-probability of the parameters q given the measurements
@@ -195,14 +206,28 @@ class DigitalTwin:
             logp : float
                 Log-likelihood of the measurements y_m given parameters q"""
         
-        q_df = pd.DataFrame(q.reshape(1,-1), columns=self.Q.variable_names())
+        q = q.reshape(1, -1)
+        q_df = pd.DataFrame(q, columns=self.Q.variable_names())
         if self.q_indices is None:
-            d = y_m - self.model.predict(q_df)
+            q_model = self.model.Q.germ2variable(q)
+            if np.any(~np.isfinite(q_model)):
+                return -np.inf
+            q_df = pd.DataFrame(q_model, columns=self.model.Q.variable_names())
+            pred = self.model.predict(q_df)
+            if np.any(~np.isfinite(pred)):
+                return -np.inf
+            d = y_m - pred
             d = d.transpose()
         else:
-            d = y_m - self.model.predict(q_df).reshape(-1, 1)[self.q_indices]
+            pred = self.model.predict(q_df).reshape(-1, 1)[self.q_indices]
+            if np.any(~np.isfinite(pred)):
+                return -np.inf
+            d = y_m - pred
         logp = self.E.logpdf(d)
-        return logp
+        logp = np.asarray(logp)
+        if not np.all(np.isfinite(logp)):
+            return -np.inf
+        return float(logp)
     
     def prior(self, q):
         """ Compute the prior probability of the parameters q
@@ -236,7 +261,7 @@ class DigitalTwin:
         logpr = self.Q.logpdf(q.reshape(-1,1))
         return logpr
     
-    def get_mean_and_var_of_posterior(self):
+    def get_mean_and_var_of_posterior(self, scaled=True):
         """ Get the mean and variance of the posterior parameter distribution
 
             Returns
@@ -251,11 +276,14 @@ class DigitalTwin:
         post_samples = sampler.get_chain(flat=True)
         means = np.mean(post_samples, axis=0)
         variances = np.var(post_samples, axis=0)
-        means_df = pd.DataFrame(means.reshape(1,-1), columns=self.Q.variable_names())
-        variances_df = pd.DataFrame(variances.reshape(1,-1), columns=self.Q.variable_names())
+        if scaled:
+            means = self.model.Q.germ2variable(means.reshape(1,-1))
+            variances = self.model.Q.germ2variable(variances.reshape(1,-1))
+        means_df = pd.DataFrame(means, columns=self.Q.variable_names())
+        variances_df = pd.DataFrame(variances, columns=self.Q.variable_names())
         return means_df, variances_df
     
-    def get_posterior_samples(self):
+    def get_posterior_samples(self, scaled=True):
         """ Get the samples from the posterior parameter distribution
 
             Returns
@@ -265,10 +293,13 @@ class DigitalTwin:
         
         sampler = self.sampler
         post_samples = sampler.get_chain(flat=True)
+        if scaled:
+            post_samples = self.model.Q.germ2variable(post_samples)
+
         post_samples_df = pd.DataFrame(post_samples, columns=self.Q.variable_names())
         return post_samples_df
     
-    def get_MAP(self): # maximum a posterior estimate
+    def get_MAP(self, scaled = True): # maximum a posterior estimate
         """ Get the maximum a posteriori estimate of the parameters
 
             Returns
@@ -283,6 +314,9 @@ class DigitalTwin:
         for p in range(post_samples.shape[1]):
             p_estimate = utils.estimate_maxima(post_samples[:,p])
             map_estimate[0,p] = p_estimate
+
+        if scaled:
+            map_estimate = self.model.Q.germ2variable(map_estimate)
 
         map_df = pd.DataFrame(map_estimate, columns=self.Q.variable_names())
         return map_df
