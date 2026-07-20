@@ -313,7 +313,8 @@ class LinRegModel:
                     "dcterms": "http://purl.org/dc/terms/",
                     "dkg": "https://origintrail.io/ontology/",
                     "mls": "http://www.w3.org/ns/mls#",
-                    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+                    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+                    "prov": "http://www.w3.org/ns/prov#"
                 },
 
                 "@id": model_id,
@@ -324,6 +325,11 @@ class LinRegModel:
                 "schema:description": description,
                 "schema:hasPart": {"@id": building_did, "dkg:ual": building_ual},
                 "dcterms:created": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "prov:wasGeneratedBy": {
+                    "@type": "prov:Activity",
+                    "schema:name": "Trace Structures API",
+                    "schema:url": "https://buildchain.ilab.sztaki.hu/"
+                },
 
                 "mls:specifiedBy": mls_spec,
                 "mls:hasInput": mls_inputs,
