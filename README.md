@@ -1,7 +1,6 @@
 # digital_twinning
 
 [![DOI](https://zenodo.org/badge/1113759480.svg)](https://doi.org/10.5281/zenodo.17990407)
-[![Read the Docs](https://img.shields.io/readthedocs/digital-twinning?style=for-the-badge&logo=readthedocs)](https://digital-twinning.readthedocs.io/en/latest/)
 [![PyPI - Version](https://img.shields.io/pypi/v/digital-twinning?style=for-the-badge)](https://pypi.org/project/digital-twinning/)
 
 
