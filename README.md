@@ -1,3 +1,5 @@
+![Logo](https://raw.githubusercontent.com/TRACE-Structures/digital_twinning/main/docs/digital_twinning_logo.png)
+
 # digital_twinning
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.17990407-blue)](https://doi.org/10.5281/zenodo.17990407)
