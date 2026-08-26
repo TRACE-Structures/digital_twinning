@@ -31,58 +31,7 @@ class PredictiveModel:
     method : str
         Method type for predictive model ('DNN', 'gPCE', 'GBT', 'LinReg')
     model : object
-        Instance of the specific predictive model class
-
-    Methods:
-    ----------
-    get_model(self)
-        Initializes and returns the predictive model based on the specified method
-    
-    train_test_split(self, X_data, y_data, train_test_ratio=0.2, random_seed=1997, split_type='shuffle')
-        Splits the dataset into training and testing sets
-    
-    train(self, q_train, y_train, q_scaler=None, y_scaler=None, k_fold=None, **params)
-        Trains the predictive model using the provided training data
-    
-    predict(self, q, **params)
-        Predicts QoI values for given input parameters using the trained model
-    
-    save_model(self, name=None, path=None)
-        Saves the predictive model to a file
-    
-    get_mean_and_var(self, n_sample=1000)
-        Computes the mean and variance of the model predictions over a specified number of samples
-    
-    get_sobol_sensitivity(self, max_index=1)
-        Computes Sobol sensitivity indices up to the specified maximum index
-    
-    get_shap_values(self, q, mean=False, sample_size_from_q=100)
-        Computes SHAP values for the model predictions
-    
-    subtract_effects(self, q, QoI, subtracted_params)
-        Subtracts the effects of specified parameters from the QoI using SHAP values
-    
-    calculate_error_ratios(self, errors, threshold_ratio)
-        Calculates error ratios based on a threshold ratio
-    
-    plot_sobol_sensitivity(self, y_train, max_index=1, **kwargs)
-        Plots Sobol sensitivity indices
-    
-    plot_shap_single_waterfall(self, X_test, **kwargs)
-        Plots a single SHAP waterfall plot
-    
-    plot_shap_multiple_waterfalls(self, X_test, **kwargs)
-        Plots multiple SHAP waterfall plots
-    
-    plot_shap_beeswarm(self, X_test, **kwargs)
-        Plots a SHAP beeswarm plot
-    
-    plot_effects(self, effects, xticks=True)
-        Plots the effects of parameters on QoI
-    
-    create_mx_from_tuple(self, pairs, measured_names)
-        Creates a binary matrix from pairs of QoI names and measured variable names
-    '''
+        Instance of the specific predictive model class '''
 
     def __init__(self, Q, QoI_names, method, **kwargs):
         '''
@@ -1098,13 +1047,7 @@ class SurrogateModel(PredictiveModel):
     method : str
         Method used for the surrogate model ('DNN', 'gPCE', 'GBT', 'LinReg').
     **kwargs : dict
-        Additional keyword arguments for model configuration.
-
-    Methods:
-    --------
-    save_model(self, name=None, path=None):
-        Saves the surrogate model to a file or returns a byte stream.
-    '''
+        Additional keyword arguments for model configuration. '''
 
     def __init__(self, Q, QoI_names, method, **kwargs):
         '''
@@ -1165,13 +1108,7 @@ class DataDrivenModel(PredictiveModel):
     method : str
         Method used for the data-driven model ('DNN', 'gPCE', 'GBT', 'LinReg').
     **kwargs : dict
-        Additional keyword arguments for model configuration.
-
-    Methods:
-    --------
-    save_model(self, name=None, path=None):
-        Saves the data-driven model to a file or returns a byte stream.
-    '''
+        Additional keyword arguments for model configuration. '''
 
     def __init__(self, Q, QoI_names, method, **kwargs):
         '''

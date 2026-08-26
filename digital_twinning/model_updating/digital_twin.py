@@ -19,41 +19,7 @@ class DigitalTwin:
             Error model representing the discrepancy between model predictions and measurements
 
         Q : VariableSet object
-            Variable set defining the probabilistic variables of the model
-
-        Methods
-        -------
-        __init__(model, E)
-            Initialize the Digital Twin with given model and error model
-        
-        get_logprob(q)
-            Compute the log-probability of the parameters q given the measurements
-
-        update(y_m, nwalkers=150, nburn=100, niter=350, Q_='default', plot_samples=False, name_pairs=None)
-            Update the digital twin using MCMC with given measurements y_m
-
-        likelihood(q, y_m)
-            Compute the likelihood of the measurements y_m given parameters q
-
-        loglikelihood(q, y_m)
-            Compute the log-likelihood of the measurements y_m given parameters q
-
-        prior(q)
-            Compute the prior probability of the parameters q
-
-        logprior(q)
-            Compute the log-prior probability of the parameters q
-
-        get_mean_and_var_of_posterior()
-            Get the mean and variance of the posterior parameter distribution
-
-        get_posterior_samples()
-            Get the samples from the posterior parameter distribution
-
-        get_MAP()
-            Get the maximum a posteriori estimate of the parameters
-        get_indices_from_mx(H)
-            Get the indices of parameters and measurements from the mapping matrix H """
+            Variable set defining the probabilistic variables of the model """
        
     def __init__(self, model, E):
         """ Initialize the Digital Twin with given model and error model

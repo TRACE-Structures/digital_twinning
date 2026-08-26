@@ -32,51 +32,7 @@ class JointManager:
             Scaling factors for each model's parameters
             
         shift : list of list of float
-            Shift values for each models's parameters
-            
-        Methods
-        -------
-        __init__(models, joint_parameters)
-            Initialize the JointManager with given models and joint parameters
-            
-        generate_joint_stdrn_simparamset(sigmas)
-            Generate joint standard random simulation variable set
-            
-        choose_distribution(models, joint_names, mode='auto')
-            Choose distribution for joint parameters
-            
-        get_joint_paramset_and_indices(models, joint_parameters)
-            Create joint VariableSet and mapping indices
-            
-        get_logprob(q)
-            Compute log-probability for MCMC
-            
-        logprior(q)
-            Compute log-prior probability
-            
-        loglikelihood(q, y_m)
-            Compute log-likelihood of observed data
-            
-        update(y_list, sigmas, nwalkers=150, nburn=100, niter=350, Q_='default', plot_samples=False)
-            Perform MCMC update with observed data
-            
-        get_mean_and_var_by_model(scaled=True)
-            Get mean and variance of posterior for each model
-            
-        get_MAP_by_model(scaled=True)
-            Get maximum a posteriori estimate for each model
-            
-        get_MAP()
-            Get maximum a posteriori estimate for joint parameters
-            
-        get_data_of_model(model_index)
-            Get MAP, mean, variance, and samples for a specific model
-            
-        get_posterior_samples_by_model(scaled=True)
-            Get posterior samples for each model
-            
-        get_posterior_samples()
-            Get posterior samples for joint parameters """
+            Shift values for each models's parameters """
     
     def __init__(self, models, joint_parameters):
         """ Initialize the JointManager with given models and joint parameters

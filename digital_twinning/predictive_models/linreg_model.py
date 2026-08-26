@@ -23,34 +23,7 @@ class LinRegModel:
         The variable set used for the model.
 
     QoI_names : list
-        List of Quantity of Interest names.
-
-    Methods
-    -------
-    __init__(self, Q, QoI_names)
-        Initializes the LinRegModel with a parameter set and QoI names.
-
-    train_and_evaluate(self, X_train, y_train, X_val, y_val)
-        Trains the model and evaluates it on training and validation data.
-
-    predict(self, X)
-        Makes predictions using the trained model.
-
-    score(self, X, y)
-        Computes the mean squared error of the model on given data.
-
-    evaluate_model(self, y_train, X_test, y_test, verbose=False)
-        Evaluates the model using various statistical metrics.
-
-    compute_partial_vars(self, model_obj, max_index)
-        Computes partial variances using Sobol sensitivity analysis.
-
-    get_shap_values(self, predict_fn, q, forced=False, explainer_type="kernelexplainer")
-        Computes SHAP values for model interpretability.
-
-    to_jsonld(self, model_id: str)
-        Serializes the model to JSON-LD format.
-    '''
+        List of Quantity of Interest names. '''
 
     def __init__(self, Q, QoI_names):
         '''

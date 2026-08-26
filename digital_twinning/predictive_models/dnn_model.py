@@ -35,32 +35,7 @@ class DNNModel(nn.Module):
 
     outputAF : str
         Activation function for the output layer ('relu', 'sigmoid', 'tanh', 'gelu',
-        'leakyrelu', 'softmax', 'none').
-
-    Methods
-    -------
-    forward(self, x)
-        Defines the forward pass of the DNN.
-
-    train_and_validate(self, q_train, y_train, q_val, y_val, loss='mse', optimizer='adam',
-                       epochs=5, batch_size=64, early_stopping=None)
-        Trains and validates the DNN model.
-    
-    evaluate(self, test_dataset)
-        Evaluates the model on a test dataset.
-    
-    predict(self, q)
-        Makes predictions using the trained model.
-    
-    compute_partial_vars(self, model_obj, max_index)
-        Computes partial variances using Sobol sensitivity analysis.
-    
-    get_shap_values(self, predict_fn, q, forced=False, explainer_type="kernelexplainer")
-        Computes SHAP values for model interpretability.
-    
-    to_jsonld(self, model_id=None)
-        Converts the model to JSON-LD format.    
-    '''
+        'leakyrelu', 'softmax', 'none').   '''
 
     def __init__(self, input_size, output_size, layers, outputAF):
         '''
