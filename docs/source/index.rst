@@ -138,6 +138,6 @@ For issues, questions, or contributions, please refer to the project repository 
    :hidden:
    :maxdepth: 2
 
-   api/digital_twinning.predicitve_models
+   api/digital_twinning.predictive_models
    api/digital_twinning.model_updating
    api/digital_twinning.utils
