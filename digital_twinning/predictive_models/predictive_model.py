@@ -4,6 +4,7 @@ import gPCE_model
 from .gbt_model import GBTModel
 from .dnn_model import DNNModel
 from .linreg_model import LinRegModel
+from .mosaic_model import MosaicModel
 
 from sklearn.model_selection import train_test_split, KFold
 from sklearn.preprocessing import FunctionTransformer
@@ -81,6 +82,9 @@ class PredictiveModel:
             case "LinReg":
                 LinReg = LinRegModel(self.Q, self.QoI_names)
                 return LinReg
+            case "Mosaic":
+                Mosaic = MosaicModel(self.Q, self.QoI_names, **self.init_config)
+                return Mosaic
             case _:
                 raise ValueError(f"There is no method type: {self.method}")
     
@@ -146,6 +150,10 @@ class PredictiveModel:
         if self.method == "gPCE":
             xi = q_train.values
             yt = y_train.values
+
+        elif self.method == "Mosaic":
+            xi = q_train
+            yt = y_train
         else:
             self.get_q_scaler(q_train, q_scaler)
             self.get_y_scaler(y_train, y_scaler)
@@ -235,6 +243,10 @@ class PredictiveModel:
                 xi_tr, xi_vl = pd.DataFrame(xi_train, columns=self.Q.variable_names()), pd.DataFrame(xi_val, columns=self.Q.variable_names())
                 yt_tr, yt_vl = pd.DataFrame(yt_train, columns=self.QoI_names), pd.DataFrame(yt_val, columns=self.QoI_names)
                 tr_loss, vl_loss = self.model.train_and_evaluate(xi_tr, yt_tr, xi_vl, yt_vl)
+            case "Mosaic":
+                xi_tr, xi_vl = pd.DataFrame(xi_train, columns=self.Q.variable_names()), pd.DataFrame(xi_val, columns=self.Q.variable_names())
+                yt_tr, yt_vl = pd.DataFrame(yt_train, columns=self.QoI_names), pd.DataFrame(yt_val, columns=self.QoI_names)
+                tr_loss, vl_loss = self.model.train_and_validate(xi_tr, yt_tr, xi_vl, yt_vl, **params)
             case _:
                 raise ValueError(f"There is no method type: {self.method}")
         return tr_loss, vl_loss
@@ -327,6 +339,8 @@ class PredictiveModel:
             q = pd.DataFrame(q, columns=self.Q.variable_names())
         if self.method == "gPCE":
             xi = q.values
+        elif self.method == "Mosaic":
+            xi = q
         else:
             xi = self.get_scaled_q(q)
         match self.method:
@@ -338,10 +352,12 @@ class PredictiveModel:
                 xi = pd.DataFrame(xi, columns=self.Q.variable_names())
             case "LinReg":
                 xi = pd.DataFrame(xi, columns=self.Q.variable_names())
+            case "Mosaic":
+                xi = pd.DataFrame(xi, columns=self.Q.variable_names())
             case _:
                 raise ValueError(f"There is no method type: {self.method}")
         y_t = self.model.predict(xi, **params)
-        if self.method == "gPCE":
+        if self.method == "gPCE" or self.method == "Mosaic":
             y = y_t
         else:
             y = self.get_orig_y(y_t)
@@ -364,7 +380,7 @@ class PredictiveModel:
             Variance of the model predictions
         '''
 
-        if self.method == "DNN" or self.method == "GBT" or self.method == "LinReg":
+        if self.method == "DNN" or self.method == "GBT" or self.method == "LinReg" or self.method == "Mosaic":
             q = self.Q.sample(n_sample)
             q_df = pd.DataFrame(q, columns=self.Q.variable_names())
             y_predict = self.predict(q_df)
