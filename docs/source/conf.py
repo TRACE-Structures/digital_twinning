@@ -13,7 +13,7 @@
 project = 'digital_twinning'
 copyright = '2026, András Urbanics, Áron Friedman, Bence Popovics, Emese Vastag, Noémi Friedman'
 author = 'András Urbanics, Áron Friedman, Bence Popovics, Emese Vastag, Noémi Friedman'
-release = 'v1.0.4'
+release = 'v1.0.5'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
