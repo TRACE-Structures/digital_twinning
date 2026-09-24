@@ -3,15 +3,15 @@ from pathlib import Path
 
 setup(
     name='digital_twinning',
-    version='1.0.2',
+    version='1.0.3',
     author='András Urbanics, Áron Friedman, Bence Popovics, Emese Vastag, Noémi Friedman',
     author_email='popbence@hun-ren.sztaki.hu',
     description='A comprehensive package for digital twin model updating and predictive modeling using machine learning and uncertainty quantification techniques',
     long_description = Path("README.md").read_text(encoding="utf-8"),
     long_description_content_type='text/markdown',
     url='https://github.com/TRACE-Structures/digital_twinning/',
-    packages=find_packages(exclude=["demo", "demo.*"]),
-    py_modules=['digital_twinning'],
+    packages=['digital_twinning'] + ['digital_twinning.' + p for p in find_packages(where='src')],
+    package_dir={'digital_twinning': 'src'},
     install_requires=[
         'asyncio',
         'catboost',

@@ -13,4 +13,5 @@ Predictive Models
    digital_twinning.predictive_models.linreg_model
    digital_twinning.predictive_models.gbt_model
    digital_twinning.predictive_models.dnn_model
+   digital_twinning.predictive_models.mosaic_model
    digital_twinning.predictive_models.predictive_model

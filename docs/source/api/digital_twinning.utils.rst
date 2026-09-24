@@ -13,4 +13,5 @@ Utility Functions
    digital_twinning.utils.utils
    digital_twinning.utils.object_utils
    digital_twinning.utils.plotting_functions
+   digital_twinning.utils.mosaic_plotting_functions
    digital_twinning.utils.gbt_plot_utils
