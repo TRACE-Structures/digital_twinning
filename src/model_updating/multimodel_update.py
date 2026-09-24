@@ -4,7 +4,7 @@ import uncertain_variables as uv
 import pandas as pd
 import emcee
 import time
-from src.utils import utils
+from digital_twinning.utils import utils
 import numpy as np
 
 import warnings

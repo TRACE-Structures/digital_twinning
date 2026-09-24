@@ -5,7 +5,7 @@ import time
 import pandas as pd
 import numpy as np
 import uncertain_variables as uv
-from src.utils import utils
+from digital_twinning.utils import utils
 
 class DigitalTwin:
     """ Digital Twin class for model updating using MCMC

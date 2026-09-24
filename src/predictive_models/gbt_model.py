@@ -20,7 +20,7 @@ import shap
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import ElasticNet
-from src.utils.gbt_plot_utils import *
+from digital_twinning.utils.gbt_plot_utils import *
 from SALib.analyze import sobol
 import json
 import datetime

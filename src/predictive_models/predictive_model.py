@@ -12,7 +12,7 @@ import torch
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
-import src.utils.utils as utils
+import digital_twinning.utils.utils as utils
 import os
 import pickle
 from sklearn.metrics import mean_squared_error
