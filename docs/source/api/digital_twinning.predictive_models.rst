@@ -9,9 +9,10 @@ Predictive Models
 .. toctree::
    :hidden:
    :maxdepth: 0
-
+   
+   digital_twinning.predictive_models.predictive_model
    digital_twinning.predictive_models.linreg_model
+   digital_twinning.predictive_models.gpce_model
    digital_twinning.predictive_models.gbt_model
    digital_twinning.predictive_models.dnn_model
    digital_twinning.predictive_models.mosaic_model
-   digital_twinning.predictive_models.predictive_model

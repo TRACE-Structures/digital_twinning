@@ -1,7 +1,7 @@
 Deep Neural Network Model
 =========================
 
-.. automodule:: digital_twinning.predictive_models.dnn_model
+.. automodule:: digital_twinning.predictive_models.DNNModel
    :members:
    :show-inheritance:
    :undoc-members:

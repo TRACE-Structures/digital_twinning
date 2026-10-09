@@ -38,8 +38,8 @@ class PredictiveModel:
         '''
         Initializes the PredictiveModel with the given parameters.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         Q : VariableSet
             Variable set
         QoI_names : list
@@ -92,8 +92,8 @@ class PredictiveModel:
         '''
         Splits the dataset into training and testing sets.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         X_data : pd.DataFrame
             Input features
         y_data : pd.DataFrame
@@ -105,7 +105,7 @@ class PredictiveModel:
         split_type : str
             Type of split ('shuffle', 'no_shuffle', 'reverse') (default is 'shuffle')
 
-        Returns:
+        Returns
         -------
         X_train, X_test, y_train, y_test : pd.DataFrame
             Split training and testing datasets

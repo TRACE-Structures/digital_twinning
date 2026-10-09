@@ -1,7 +1,7 @@
 Linear Regression Model
 =======================
 
-.. automodule:: digital_twinning.predictive_models.linreg_model
+.. automodule:: digital_twinning.predictive_models.LinRegModel
    :members:
    :show-inheritance:
    :undoc-members:

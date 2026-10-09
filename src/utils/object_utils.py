@@ -95,7 +95,7 @@ def plot_shap_values(model, q=None, param_name=None):
         q = pd.DataFrame(q, columns=model.Q.variable_names())
     
     xi = q
-    explainer = model.model.explainer
+    explainer = model.explainer
     shap_values = explainer(xi)
 
     fig, ax = plt.subplots(figsize=(8, 6))

@@ -8,10 +8,61 @@ from matplotlib.lines import Line2D
 from matplotlib.colors import LinearSegmentedColormap
 from scipy.stats import gaussian_kde
 from scipy import stats
+from sklearn.preprocessing import FunctionTransformer
+from sklearn.preprocessing import MinMaxScaler
+
 
 ##########################################################################################
 # Functions for toy example visualization and sensitivity analysis
 ##########################################################################################
+
+def identity_func(x):
+    '''
+    Identity function that returns the input as a NumPy array.
+
+    Parameters:
+    -----------
+    x : pd.DataFrame or np.ndarray
+        Input data to be converted.
+
+    Returns:
+    -------
+    np.ndarray
+        Input data as a NumPy array.    
+    '''
+
+    if isinstance(x, np.ndarray):
+        return x
+    return x.to_numpy()
+
+def identity_inverse_func(x):
+    '''
+    Inverse identity function that returns the input as is.
+
+    Parameters:
+    -----------
+    x : np.ndarray
+        Input data.
+        
+    Returns:
+    -------
+    np.ndarray
+        Input data as is.
+    '''
+
+    return x
+
+def get_scaler(scale_method, y=None):
+
+    if scale_method == 'identity':
+        scaler = FunctionTransformer(func=identity_func, inverse_func=identity_inverse_func)
+    elif scale_method == 'minmax':
+        scaler = MinMaxScaler((0.05, 0.95))
+        scaler.fit(y)
+    return scaler
+
+
+
 
 def plot_3Dscatter(x, y, z, x_grids=None, y_grids=None, z_plane=None):
     ''' 3D scatter plot with optional surface.
@@ -189,7 +240,7 @@ def plot_shap_single_waterfall(model, silent, q, param_name):
     if type(q) != pd.DataFrame:
         q = pd.DataFrame([q], columns=model.Q.variable_names())
             
-    explainer = model.model.explainer
+    explainer = model.explainer
     shap_values = explainer(q, silent=silent)
     labels = model.Q.variable_names()
     param_index = model.QoI_names.index(param_name)
@@ -288,7 +339,7 @@ def plot_shap_multiple_waterfalls(model, silent, q, param_name=None, show_param_
     if type(q) != pd.DataFrame:
         q = pd.DataFrame([q], columns=model.Q.variable_names())
 
-    explainer = model.model.explainer
+    explainer = model.explainer
     shap_values = explainer(q, silent=silent)
     
     labels = model.Q.variable_names()
@@ -431,7 +482,7 @@ def plot_shap_beeswarm(model, silent, param_name, q=None):
             Beeswarm plot figure. '''
     
     if q is not None:
-        explainer = model.model.explainer
+        explainer = model.explainer
         shap_values = explainer(q, silent=silent)
     else:
         shap_values = model.shap_values
