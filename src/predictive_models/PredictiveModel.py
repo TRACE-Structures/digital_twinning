@@ -19,7 +19,7 @@ class PredictiveModel(ABC):
     Abtract class for Predictive Models including Surrogate Models and Data-Driven Models '''
 
     @abstractmethod
-    def train(self, q_train, y_train, q_scaler=None, y_scaler=None, k_fold=None, **params):
+    def train(self, q_train, y_train, k_fold=None, **params):
         pass
 
     @abstractmethod

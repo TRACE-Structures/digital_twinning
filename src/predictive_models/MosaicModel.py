@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.metrics import mean_squared_error
 import shap
 from .PredictiveModel import PredictiveModel
+import pandas as pd
 
 
 FREQ_RE = re.compile(r"^f\.(\d+)$")
@@ -171,6 +172,7 @@ class MosaicModel(PredictiveModel):
 
 
     def train_and_validate(self, X_train, y_train, X_val, y_val):
+        # if isinstance(X_train, pd.DataFrame):
         X_train = X_train.values
         y_train = self.reorder_dataframe(y_train)
         train_freq, train_eig = self.extract_arrays(y_train)
@@ -185,6 +187,9 @@ class MosaicModel(PredictiveModel):
         y_pred_vl = self.model.predict(X_val)
         vl_loss = mean_squared_error(y_val.values, y_pred_vl)
         return tr_loss, vl_loss
+
+    def numpy_train(self, X_train, train_freq, train_eig):
+        self.model.fit(X_train, train_freq, train_eig)
 
 
     def predict(self, X):
@@ -251,7 +256,7 @@ class MosaicModel(PredictiveModel):
         if list_of_subdomains[mode-1] == 1:
             return fig1, None, None
         else:
-            fig2 = mosaic.plot_space_division(self.model, mode, n_samples)
+            fig2, _ = mosaic.plot_classification_regions(self.model, mode)
             fig3 = mosaic.plot_reference_correlation_matrix(self.model, mode)
         return fig1, fig2, fig3
 

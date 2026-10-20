@@ -265,9 +265,9 @@ class DNNModel(PredictiveModel):
 
             # Build hidden layers
             for layer in layers:
-                neurons = default_neurons# if layer['neurons'] is None else layer['neurons']
-                activation = default_activation# if layer['activation'] is None else layer['activation']
-                dropout = default_dropout# if layer['dropout'] is None else layer['dropout']
+                neurons = default_neurons if layer['neurons'] is None else layer['neurons']
+                activation = default_activation if layer['activation'] is None else layer['activation']
+                dropout = default_dropout if layer['dropout'] is None else layer['dropout']
 
                 # Add Linear, Activation, and Dropout layers to the list
                 hidden_layers.append(nn.Linear(prev_size, neurons))
