@@ -10,7 +10,6 @@ Utility Functions
    :hidden:
    :maxdepth: 0
 
-   digital_twinning.utils.utils
-   digital_twinning.utils.object_utils
+   digital_twinning.utils.data_utils
    digital_twinning.utils.plotting_functions
-   digital_twinning.utils.gbt_plot_utils
+   digital_twinning.utils.preprocess_modeshape_data

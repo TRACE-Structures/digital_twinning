@@ -5,15 +5,34 @@ from plotly.colors import sample_colorscale
 from matplotlib.cm import ScalarMappable
 from plotly.subplots import make_subplots
 
-def scatter_plot_modes_subplots(modeshapes_dict, x_key, y_key, modes=[0, 1, 2, 3, 6]):
+def scatter_plot_modes_subplots(modeshapes_dict, x_key='Humidity', y_key='frequency', modes=[0, 1, 2, 3, 6]):
+    """ Create subplot scatter plots of specified modes comparing two variables.
+
+        Parameters
+        ----------
+        modeshapes_dict : dict of pandas.DataFrame
+            Dictionary mapping mode indices to DataFrames containing mode data.
+        x_key : str, optional
+            Column name in each DataFrame to use for x-axis (default 'Humidity').
+        y_key : str, optional
+            Column name in each DataFrame to use for y-axis (default 'frequency').
+        modes : list of int, optional
+            List of modes to plot (default `[0, 1, 2, 3, 6]`).
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            Figure with a row of scatter subplots of specified modes. """
+    
+    num_plots = len(modes)
     rows = 1
-    cols = len(modes)
+    cols = 3 if num_plots > 1 else 1
 
     fig = make_subplots(rows=rows, cols=cols, subplot_titles=[f"Mode {m}" for m in modes])
 
     for idx, mode in enumerate(modes):
         row = 1
-        col = idx + 1
+        col = idx % 3 + 1
 
         df = modeshapes_dict[mode]
         x = df[x_key]
@@ -36,8 +55,8 @@ def scatter_plot_modes_subplots(modeshapes_dict, x_key, y_key, modes=[0, 1, 2, 3
         fig.update_yaxes(title_text=y_key, row=row, col=col)
 
     fig.update_layout(
-        height=300,
-        width=400 * cols,
+        height=300 * rows,
+        width=1000,
         title_text=f'{x_key} vs {y_key} for Selected Modes',
         showlegend=False
     )
@@ -45,6 +64,20 @@ def scatter_plot_modes_subplots(modeshapes_dict, x_key, y_key, modes=[0, 1, 2, 3
     return fig
 
 def plot_parts(modeshapes_dict, mode):
+    """ Plot real and imaginary parts of sensor mode shapes for all sensors in separate figures.
+
+        Parameters
+        ----------
+        modeshapes_dict : dict of pandas.DataFrame
+            Dictionary with mode data keyed by mode indices.
+        mode : int
+            Mode index to plot.
+
+        Returns
+        -------
+        tuple of matplotlib.figure.Figure
+            (Figure for real parts, Figure for imaginary parts) of sensor data. """
+    
     df = modeshapes_dict[mode]
     parts = [('real', 'orange', 'Real'), ('imag', 'royalblue', 'Imaginary')]
     figures = []
@@ -75,6 +108,26 @@ def plot_parts(modeshapes_dict, mode):
     return figures[0], figures[1]
 
 def plot_sensor_complex_colored(modeshapes_dict, mode, sensor, color_by='Temperature', lines=False):
+    """ Plot sensor real and imaginary parts over time colored by a parameter.
+
+        Parameters
+        ----------
+        modeshapes_dict : dict of pandas.DataFrame
+            Dictionary of mode DataFrames.
+        mode : int
+            Mode index to plot.
+        sensor : int
+            Sensor number (1 to 6).
+        color_by : str, optional
+            Column name for color mapping (default 'Temperature').
+        lines : bool, optional
+            If True, draw lines connecting points.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            Figure object with scatter plot colored by `color_by`. """
+    
     df = modeshapes_dict[mode]
     t = df['Datetime']
     color_data = df[color_by]
@@ -105,7 +158,24 @@ def plot_sensor_complex_colored(modeshapes_dict, mode, sensor, color_by='Tempera
 
     return fig
 
+
 def plot_complex_plane_all_sensors(modeshapes_dict, mode, color_by='Temperature'):
+    """ Plot complex plane scatter plots (real vs imaginary) for all sensors colored by a parameter.
+
+        Parameters
+        ----------
+        modeshapes_dict : dict of pandas.DataFrame
+            Mode dataframes mapped by mode index.
+        mode : int
+            Mode index to plot.
+        color_by : str, optional
+            Parameter name to color points by (default 'Temperature').
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            Figure containing subplots for each sensor in complex plane. """
+    
     df = modeshapes_dict[mode]
     num_sensors = 6
 
@@ -141,6 +211,22 @@ def plot_complex_plane_all_sensors(modeshapes_dict, mode, color_by='Temperature'
     return fig
 
 def plot_mode_shapes_3d(modeshapes_dict, mode, color_by='Temperature'):
+    """ Create a 3D plotly visualization of mode shapes colored by a parameter.
+
+        Parameters
+        ----------
+        modeshapes_dict : dict of pandas.DataFrame
+            Mode dataframes keyed by mode index.
+        mode : int
+            Mode index to visualize.
+        color_by : str, optional
+            Column used to color lines and markers (default 'Temperature').
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            3D interactive figure showing mode shapes for each timestep. """
+    
     df = modeshapes_dict[mode]
     fig = go.Figure()
     num_sensors = 6

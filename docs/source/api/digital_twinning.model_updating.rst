@@ -12,3 +12,4 @@ Model Updating
 
    digital_twinning.model_updating.digital_twin
    digital_twinning.model_updating.multimodel_update
+   digital_twinning.model_updating.plotting_functions

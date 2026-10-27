@@ -1,7 +1,7 @@
-Generalized Polynomial Chaos Expansion Model
-===========================================
+Generalized Polynomial Chaos Expansion
+======================================
 
-.. automodule:: digital_twinning.predictive_models.GPCEModel
+.. automodule:: digital_twinning.predictive_models.gPCE
    :members:
    :show-inheritance:
    :undoc-members:

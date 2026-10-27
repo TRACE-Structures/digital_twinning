@@ -30,6 +30,13 @@ Predictive Models
 - **Linear Regression**: Basic linear regression models for baseline comparisons
 - **gPCE Models**: Generalized Polynomial Chaos Expansion for uncertainty quantification
 
+Probabilistic Models
+~~~~~~~~~~~~~~~~~~
+
+- **Probabilistic Model**: Base class for probabilistic models
+- **Mixture Density Network (MDN)**: Flexible mixture density network implementation
+- **CRPS Model**: Continuous Ranked Probability Score-based model
+
 Model Updating
 ~~~~~~~~~~~~~~
 
@@ -139,5 +146,6 @@ For issues, questions, or contributions, please refer to the project repository 
    :maxdepth: 2
 
    api/digital_twinning.predictive_models
+   api/digital_twinning.probabilistic_models
    api/digital_twinning.model_updating
    api/digital_twinning.utils
