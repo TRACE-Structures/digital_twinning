@@ -94,7 +94,7 @@ Gradient Boosted Decision Trees with multiple backend options.
 
 The code is developed by András Urbanics, Áron Friedman, Bence Popovics, Emese Vastag, Elmar Zander and Noémi Friedman in the TRACE-Structures group.
 
-This work has been funded by the European Commission Horizon Europe Innovation Action project 101092052 [BUILDCHAIN](https://buildchain-project.eu/)
+This work was funded by the European Commission through the Horizon Europe Innovation Action [BUILDCHAIN](https://buildchain-project.eu/) (grant agreement No. 101092052) up to and including v1.0.0, and by the PRODIGI project from later versions onward.
 
 ## License
 
