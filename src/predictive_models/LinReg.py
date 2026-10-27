@@ -7,9 +7,9 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 import datetime
 from .PredictiveModel import PredictiveModel
-import digital_twinning.utils.utils as utils
+from .utils import get_scaler
 
-class LinRegModel(PredictiveModel):
+class LinReg(PredictiveModel):
     '''
     Linear Regression Model for Predictive Modelling
     
@@ -75,7 +75,7 @@ class LinRegModel(PredictiveModel):
         return tr_loss, vl_loss
 
     def train(self, q_train, y_train, k_fold=None):
-        self.scaler = utils.get_scaler("identity")
+        self.scaler = get_scaler("identity")
 
         xi = self.get_scaled(q_train)
         yt = self.get_scaled(y_train)

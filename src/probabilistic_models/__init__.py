@@ -1,3 +1,3 @@
-from .MDNModel import *
-from .CRPSModel import *
+from .MDN import *
+from .CRPS import *
 from .ProbabilisticModel import *

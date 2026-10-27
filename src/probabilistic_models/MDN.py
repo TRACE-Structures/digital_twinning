@@ -2,14 +2,12 @@ from .ProbabilisticModel import ProbabilisticModel
 import torch
 import torch.nn as nn
 from torchnaut.mdn import MDNMV
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 from copy import deepcopy
 
 
-class MDNModel(ProbabilisticModel):
+class MDN(ProbabilisticModel):
 
     def __init__(self, Q, QoI_names, layers, n_components=5):
         self.Q = Q

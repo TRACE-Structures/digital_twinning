@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from sklearn.model_selection import train_test_split, KFold
 import numpy as np
 import pandas as pd
-import digital_twinning.utils.utils as utils
+from .plotting_functions import plot_remained_effects, plot_shap_single_waterfall, plot_shap_multiple_waterfalls, plot_shap_beeswarm, plot_effects, plot_sobol_sensitivity
 import os
 import pickle
 from sklearn.metrics import mean_squared_error
@@ -121,7 +121,7 @@ class PredictiveModel(ABC):
         state = self.__dict__.copy()
         
         # Remove large training data attributes before pickling
-        for attr in ['X_train', 'y_train', 'X_test', 'y_test']:
+        for attr in ['X_train', 'y_train', 'X_test', 'y_test', 'explainer']:
             if attr in state:
                 del state[attr]
         
@@ -543,7 +543,7 @@ class PredictiveModel(ABC):
             if (higher_measured_bound[i] > higher_bound[i] + margin[i]) or (lower_measured_bound[i] < lower_bound[i] - margin[i]):
                 alert = True
                 break
-        fig = utils.plot_remained_effects(higher_bound, lower_bound, margin, higher_measured_bound, lower_measured_bound, QoI_names, xticks)
+        fig = plot_remained_effects(higher_bound, lower_bound, margin, higher_measured_bound, lower_measured_bound, QoI_names, xticks)
         return fig, alert, remained_effects_df, error_ratio, problematic_rows, reference_statistics, monitoring_statistics
 
         
@@ -567,7 +567,7 @@ class PredictiveModel(ABC):
         if hasattr(self, 'shap_values') == False:
             self.shap_values = await self.get_shap_values(X_test, silent=silent)
             print('The SHAP values have been computed automatically!')
-        fig = utils.plot_shap_single_waterfall(self, silent, **kwargs)
+        fig = plot_shap_single_waterfall(self, silent, **kwargs)
         return fig
     
     async def plot_shap_multiple_waterfalls(self, X_test, silent=True, **kwargs):
@@ -590,7 +590,7 @@ class PredictiveModel(ABC):
         if hasattr(self, 'shap_values') == False:
             self.shap_values = await self.get_shap_values(X_test, silent=silent)
             print('The SHAP values have been computed automatically!')
-        fig = utils.plot_shap_multiple_waterfalls(self, silent, **kwargs)
+        fig = plot_shap_multiple_waterfalls(self, silent, **kwargs)
         return fig
     
     async def plot_shap_beeswarm(self, X_test, silent=True, **kwargs):
@@ -613,7 +613,7 @@ class PredictiveModel(ABC):
         if hasattr(self, 'shap_values') == False:
             self.shap_values = await self.get_shap_values(X_test, silent=silent)
             print('The SHAP values have been computed automatically!')
-        fig = utils.plot_shap_beeswarm(self, silent, **kwargs)
+        fig = plot_shap_beeswarm(self, silent, **kwargs)
         return fig
        
     async def plot_effects(self, effects, xticks=True):
@@ -633,7 +633,7 @@ class PredictiveModel(ABC):
             Figure object of the plot
         '''
 
-        fig = utils.plot_effects(effects, xticks)
+        fig = plot_effects(effects, xticks)
         return fig
     
     def create_mx_from_tuple(self, pairs, measured_names):
@@ -836,5 +836,5 @@ class PredictiveModel(ABC):
             self.max_index = max_index
         if self.max_index < max_index:
             self.get_sobol_sensitivity(max_index)
-        fig = utils.plot_sobol_sensitivity(self.sobol_index_df, y_train, param_name)
+        fig = plot_sobol_sensitivity(self.sobol_index_df, y_train, param_name)
         return fig

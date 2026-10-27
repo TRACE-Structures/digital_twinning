@@ -10,7 +10,7 @@ import datetime
 from .PredictiveModel import PredictiveModel
 from sklearn.preprocessing import MinMaxScaler
 
-class DNNModel(PredictiveModel):
+class DNN(PredictiveModel):
 
     '''
     Deep Neural Network (DNN) model for regression tasks.
@@ -45,7 +45,7 @@ class DNNModel(PredictiveModel):
         self.model = self.DNNInner(self.Q.num_variables(), len(self.QoI_names), self.layers, self.outputAF).double()
 
 
-    def train(self, q_train, y_train, k_fold=None, **params):
+    def train(self, q_train, y_train, k_fold=None, train_test_ratio=0.8, random_seed=1997, split_type='no_shuffle',**params):
         '''
         Trains the predictive model using the provided training data.
 
@@ -79,7 +79,7 @@ class DNNModel(PredictiveModel):
         if k_fold is not None:
             train_losses, val_losses = self.cross_validation(xi, yt, k_fold, **params)
         else:
-            xi_train, xi_val, yt_train, yt_val = self.train_test_split(xi, yt, test_size=0.2, random_state=12)
+            xi_train, xi_val, yt_train, yt_val = self.train_test_split(xi, yt, train_test_ratio=train_test_ratio, random_seed=random_seed, split_type=split_type)
             train_losses, val_losses = self.train_and_validate(xi_train, yt_train, xi_val, yt_val, **params)
         print(f"Average train loss: {np.mean(train_losses):.14f}, Average valid loss: {np.mean(val_losses):.14f}")      
         print(f'----- Training ended for \'DNN\' model -----')

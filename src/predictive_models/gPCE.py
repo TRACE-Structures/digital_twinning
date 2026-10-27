@@ -8,7 +8,7 @@ import copy
 from gPCE_model import gpc_multiindex2param_names
 import datetime
 
-class gPCEModel(PredictiveModel):
+class gPCE(PredictiveModel):
 
     def __init__(self, Q, QoI_names, p=4):
         '''

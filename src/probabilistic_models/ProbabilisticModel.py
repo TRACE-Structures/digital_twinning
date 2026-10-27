@@ -1,6 +1,11 @@
 from abc import ABC, abstractmethod
 from sklearn.model_selection import train_test_split, KFold
 import pandas as pd
+from scipy.stats import gaussian_kde
+from scipy.optimize import minimize
+import numpy as np
+from .plotting_functions import posterior_plot
+
 
 
 class ProbabilisticModel(ABC):
@@ -81,7 +86,156 @@ class ProbabilisticModel(ABC):
         y_predict = self.predict(q_df)
         mean, var = y_predict.mean(axis=0), y_predict.var(axis=0)
         return mean, var
-    
+
+    def get_MAP(self, samples, space='physical', refine=True, n_starts=5, logpdf=None,
+                bw_method='scott', max_kde_samples=5000, return_logpdf=False, random_seed=None):
+        '''
+        Joint maximum a posteriori (MAP) estimate from posterior samples.
+ 
+        Estimates the mode of the JOINT density of the samples (not the modes of the
+        1-D marginals, which generally do not form a point of high joint density).
+        The density is a multivariate Gaussian KDE of the samples, or the exact
+        log-density if ``logpdf`` is given. The best samples serve as starting points
+        of a multistart Nelder-Mead search for the maximum.
+ 
+        Parameters
+        ----------
+        samples : np.ndarray or pd.DataFrame, shape (n_samples, n_variables)
+            Posterior samples in PHYSICAL parameter values, columns ordered as
+            self.Q.variable_names().
+        space : {'physical', 'germ'}, optional
+            Space in which the density is maximized (default 'physical'). The mode
+            is not invariant under nonlinear reparametrization: 'physical' gives the
+            mode of the density of q, 'germ' the mode of the density of the germ
+            variables (mapped back to q). 'germ' requires self.Q.variable2germ.
+        refine : bool, optional
+            Refine the best samples with a local optimizer (default True).
+        n_starts : int, optional
+            Number of highest-density samples used as optimizer starts (default 5).
+        logpdf : callable, optional
+            Exact log-density of the posterior, ``logpdf(X) -> (n,)`` for X of shape
+            (n, n_variables) in the space given by ``space``. Overrides the KDE.
+        bw_method : str, float or callable, optional
+            KDE bandwidth, passed to scipy.stats.gaussian_kde (default 'scott').
+        max_kde_samples : int, optional
+            Samples used to build the KDE; larger sets are randomly subsampled to
+            keep the O(n^2) evaluation affordable (default 5000).
+        return_logpdf : bool, optional
+            Also return the (estimated) log-density at the MAP (default False).
+        random_seed : int, optional
+            Seed for the subsampling.
+ 
+        Returns
+        -------
+        map_df : pd.DataFrame
+            One-row DataFrame with the MAP estimate of the parameters.
+ 
+        Notes
+        -----
+        - KDE-based mode estimation is reliable in low dimension (roughly up to
+          5-6 variables) and needs enough samples; it is biased near hard prior
+          bounds (e.g. uniform priors).
+        - If the posterior is a ridge or has several equally probable modes, the
+          MAP is not unique and should not be reported as a single point estimate.
+        '''
+ 
+        names = self.Q.variable_names()
+        X = np.asarray(samples, dtype=float)
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+        if X.shape[1] != len(names):
+            raise ValueError(f"samples have {X.shape[1]} columns, Q has {len(names)} variables")
+        X = X[np.all(np.isfinite(X), axis=1)]
+        if X.shape[0] < 2:
+            raise ValueError("need at least two finite samples")
+        if space not in ('physical', 'germ'):
+            raise ValueError("space must be 'physical' or 'germ'")
+ 
+        if space == 'germ':
+            if not hasattr(self.Q, 'variable2germ'):
+                raise AttributeError("space='germ' needs Q.variable2germ")
+            X = np.asarray(self.Q.variable2germ(X), dtype=float)
+ 
+        # Variables without spread (fixed / degenerate) make the KDE covariance
+        # singular: keep them at their constant value and estimate the rest.
+        spread = X.std(axis=0)
+        active = spread > 1e-12 * np.maximum(1.0, np.abs(X).max(axis=0))
+        x_fixed = np.median(X, axis=0)
+ 
+        def embed(z):
+            x = x_fixed.copy()
+            x[active] = z
+            return x
+ 
+        if logpdf is not None:
+            def log_density(Z):
+                Xf = np.tile(x_fixed, (Z.shape[0], 1))
+                Xf[:, active] = Z
+                return np.asarray(logpdf(Xf), dtype=float).ravel()
+        else:
+            if not np.any(active):
+                log_density = None
+            else:
+                Z_kde = X[:, active]
+                if Z_kde.shape[0] > max_kde_samples:
+                    rng = np.random.default_rng(random_seed)
+                    Z_kde = Z_kde[rng.choice(Z_kde.shape[0], max_kde_samples, replace=False)]
+                try:
+                    kde = gaussian_kde(Z_kde.T, bw_method=bw_method)
+                except np.linalg.LinAlgError as err:
+                    raise np.linalg.LinAlgError(
+                        "KDE covariance is singular: the samples lie on a lower-dimensional "
+                        "set (linearly dependent parameters). The MAP is not well defined; "
+                        "consider reparametrizing.") from err
+                log_density = lambda Z: kde.logpdf(np.atleast_2d(Z).T)
+ 
+        if log_density is None:            # all variables constant
+            best_x, best_lp = x_fixed, np.nan
+        else:
+            Z = X[:, active]
+            # candidate starts: highest-density samples (evaluated on a subset for speed)
+            rng = np.random.default_rng(random_seed)
+            idx = np.arange(Z.shape[0]) if Z.shape[0] <= max_kde_samples else \
+                rng.choice(Z.shape[0], max_kde_samples, replace=False)
+            lp = log_density(Z[idx])
+            lp[~np.isfinite(lp)] = -np.inf
+            order = idx[np.argsort(lp)[::-1]]
+            lp_sorted = np.sort(lp)[::-1]
+ 
+            starts, start_lp = [], []
+            for i, l in zip(order, lp_sorted):
+                if not any(np.allclose(Z[i], s) for s in starts):
+                    starts.append(Z[i]); start_lp.append(float(l))
+                if len(starts) >= max(n_starts, 1):
+                    break
+            best_z, best_lp = starts[0], start_lp[0]
+ 
+            if refine:
+                lo, hi = Z.min(axis=0), Z.max(axis=0)
+                def neg_lp(z):
+                    if np.any(z < lo) or np.any(z > hi):    # no extrapolation beyond the samples
+                        return np.inf
+                    v = float(np.asarray(log_density(np.atleast_2d(z))).ravel()[0])
+                    return -v if np.isfinite(v) else np.inf
+                for s in starts:
+                    res = minimize(neg_lp, s, method='Nelder-Mead',
+                                   options={'xatol': 1e-10, 'fatol': 1e-12,
+                                            'maxiter': 2000 * Z.shape[1]})
+                    if np.isfinite(res.fun) and -res.fun > best_lp:
+                        best_z, best_lp = res.x, float(-res.fun)
+            best_x = embed(best_z)
+ 
+        map_estimate = best_x.reshape(1, -1)
+        if space == 'germ':
+            map_estimate = np.asarray(self.Q.germ2variable(map_estimate), dtype=float)
+ 
+        map_df = pd.DataFrame(map_estimate, columns=names)
+        return (map_df, best_lp) if return_logpdf else map_df
+
+    def plot_posterior(self, X_train, samples, extra_point=None, extra_point_name='Extra point', map_point=None):
+        fig = posterior_plot(self, X_train, samples, extra_point=extra_point, extra_point_name=extra_point_name, map_point=map_point)
+        return fig
+
     def __getstate__(self):
         '''
         Prepares the instance state for pickling by removing large training data attributes.

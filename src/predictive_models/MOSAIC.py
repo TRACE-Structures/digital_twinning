@@ -12,7 +12,7 @@ FREQ_RE = re.compile(r"^f\.(\d+)$")
 EIGVEC_RE = re.compile(r"^S\.(\d+)\.(\d+)\.([xyzXYZ])$")
 _DIR_PRIORITY = {"x": 0, "y": 1, "z": 2}  # preferred display order when inferring
 
-class MosaicModel(PredictiveModel):
+class MOSAIC(PredictiveModel):
     def __init__(self, Q, QoI_names, resolution=0.6, max_freq_degree=4, max_vect_degree=5, classification_method='svc', **class_kwargs):
         self.Q = Q
         self.resolution = resolution

@@ -1,2 +1,3 @@
-from .digital_twin import *
-from .multimodel_update import *
+from .DigitalTwin import *
+from .JointManager import *
+from .plotting_functions import *

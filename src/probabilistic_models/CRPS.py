@@ -2,14 +2,12 @@ from .ProbabilisticModel import ProbabilisticModel
 import torch
 import torch.nn as nn
 from torchnaut import crps
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 from copy import deepcopy
 
 
-class CRPSModel(ProbabilisticModel):
+class CRPS(ProbabilisticModel):
 
     def __init__(self, Q, QoI_names, layers, n_epsilon=30):
         self.Q = Q
@@ -37,14 +35,14 @@ class CRPSModel(ProbabilisticModel):
         y_train_tensor = torch.tensor(self.y_scaler.transform(y_train), dtype=torch.float32)
         y_val_tensor = torch.tensor(self.y_scaler.transform(y_val), dtype=torch.float32)
 
-        print(f'----- Training started for \'MDNModel\' model -----')
+        print(f'----- Training started for \'CRPSModel\' model -----')
         
         if k_fold is not None:
             train_losses, val_losses = self.cross_validation(y_train_tensor, q_train_tensor, k_fold, **params)
         else:
             train_losses, val_losses = self.model.train_and_validate(q_train_tensor, y_train_tensor, q_val_tensor, y_val_tensor, **params)
         # print(f"Average train loss: {np.mean(train_losses):.14f}, Average valid loss: {np.mean(val_losses):.14f}")      
-        print(f'----- Training ended for \'MDNModel\' model -----')
+        print(f'----- Training ended for \'CRPSModel\' model -----')
 
     class CRPSInner(nn.Module):
         def __init__(self, input_size, output_size, layers, n_epsilon):

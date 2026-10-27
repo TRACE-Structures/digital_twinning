@@ -5,7 +5,9 @@ import time
 import pandas as pd
 import numpy as np
 import uncertain_variables as uv
-from digital_twinning.utils import utils
+from .plotting_functions import MCMC_plot
+from scipy.optimize import minimize
+
 
 class DigitalTwin:
     """ Digital Twin class for model updating using MCMC
@@ -265,27 +267,128 @@ class DigitalTwin:
         post_samples_df = pd.DataFrame(post_samples, columns=self.Q.variable_names())
         return post_samples_df
     
-    def get_MAP(self, scaled = True): # maximum a posterior estimate
-        """ Get the maximum a posteriori estimate of the parameters
+    # def get_MAP_old(self, scaled = True): # maximum a posterior estimate
+    #     """ Get the maximum a posteriori estimate of the parameters
+
+    #         Returns
+    #         -------
+    #         map_df : pandas.DataFrame
+    #             DataFrame containing the maximum a posteriori estimate of the parameters """
+        
+    #     sampler = self.sampler
+    #     post_samples = sampler.get_chain(flat=True)
+        
+    #     map_estimate = np.zeros((1, post_samples.shape[1]))
+    #     for p in range(post_samples.shape[1]):
+    #         p_estimate = utils.estimate_maxima(post_samples[:,p])
+    #         map_estimate[0,p] = p_estimate
+
+    #     if scaled:
+    #         map_estimate = self.model.Q.germ2variable(map_estimate)
+
+    #     map_df = pd.DataFrame(map_estimate, columns=self.Q.variable_names())
+    #     return map_df
+
+
+    def get_MAP(self, scaled=True, refine=True, n_starts=5, space='germ', return_logprob=False):
+        """ Joint maximum a posteriori estimate of the parameters
+
+            Takes the MCMC sample with the highest log-posterior (always a point on
+            the posterior) and, optionally, refines it with a multistart Nelder-Mead
+            search on the exact log-posterior. Unlike combining the modes of the 1-D
+            marginals, this gives the mode of the JOINT posterior.
+
+            Parameters
+            ----------
+            scaled : bool, optional
+                Return the estimate in physical parameters (germ2variable), by default True
+
+            refine : bool, optional
+                Refine the best samples with a local optimizer, by default True
+
+            n_starts : int, optional
+                Number of best distinct samples used as optimizer starts, by default 5
+
+            space : {'germ', 'physical'}, optional
+                Space in which the density is maximized. 'germ' (default) maximizes the
+                posterior density of the germ variables the sampler works in. 'physical'
+                maximizes the density of the physical parameters q, which includes the
+                Jacobian of the germ -> q map: log pi_q = log pi_theta - log|det dq/dtheta|.
+                The two modes differ for nonlinear maps (e.g. lognormal parameters).
+
+            return_logprob : bool, optional
+                Also return the maximized log density, by default False
 
             Returns
             -------
             map_df : pandas.DataFrame
-                DataFrame containing the maximum a posteriori estimate of the parameters """
-        
-        sampler = self.sampler
-        post_samples = sampler.get_chain(flat=True)
-        
-        map_estimate = np.zeros((1, post_samples.shape[1]))
-        for p in range(post_samples.shape[1]):
-            p_estimate = utils.estimate_maxima(post_samples[:,p])
-            map_estimate[0,p] = p_estimate
+                DataFrame containing the joint MAP estimate of the parameters
 
+            Notes
+            -----
+            If the posterior is a ridge or has several equally probable modes (a
+            non-identifiable combination of parameters), the MAP is not unique and
+            should not be reported as a single point estimate. """
+        
+        if space not in ('germ', 'physical'):
+            raise ValueError("space must be 'germ' or 'physical'")
+
+        chain = self.sampler.get_chain(flat=True)
+        logp = self.sampler.get_log_prob(flat=True)
+
+        def objective_logp(theta):
+            lp = np.asarray(self.get_logprob(np.asarray(theta, dtype=float)), dtype=float)
+            if lp.size != 1:
+                raise ValueError(f"get_logprob returned {lp.size} values instead of one; "
+                                 f"check the shape expected by Q.logpdf in logprior()")
+            lp = lp.item()
+            if not np.isfinite(lp):
+                return -np.inf
+            if space == 'physical':
+                lp -= self._log_abs_det_jacobian(theta)
+            return lp
+
+        # starting points: best distinct samples (by the objective actually maximized)
+        order = np.argsort(logp)[::-1]
+        cand = []
+        for i in order:
+            if not any(np.allclose(chain[i], c) for c in cand):
+                cand.append(chain[i])
+            if len(cand) >= max(n_starts, 1) * (4 if space == 'physical' else 1):
+                break
+        cand_lp = [objective_logp(c) for c in cand]
+        best_idx = np.argsort(cand_lp)[::-1][:max(n_starts, 1)]
+        best_theta, best_lp = cand[best_idx[0]], cand_lp[best_idx[0]]
+
+        if refine:
+            for j in best_idx:
+                res = minimize(lambda th: -objective_logp(th), cand[j], method='Nelder-Mead',
+                               options={'xatol': 1e-8, 'fatol': 1e-10, 'maxiter': 2000 * chain.shape[1]})
+                lp = -res.fun
+                if np.isfinite(lp) and lp > best_lp:
+                    best_theta, best_lp = res.x, lp
+
+        map_estimate = np.asarray(best_theta, dtype=float).reshape(1, -1)
         if scaled:
             map_estimate = self.model.Q.germ2variable(map_estimate)
 
         map_df = pd.DataFrame(map_estimate, columns=self.Q.variable_names())
-        return map_df
+        return (map_df, best_lp) if return_logprob else map_df
+
+    def _log_abs_det_jacobian(self, theta, h=1e-6):
+        """ log|det d q / d theta| of the germ -> physical map (central differences) """
+        
+        theta = np.asarray(theta, dtype=float)
+        n = theta.size
+        J = np.empty((n, n))
+        for j in range(n):
+            e = np.zeros(n)
+            e[j] = h
+            qp = np.asarray(self.model.Q.germ2variable((theta + e).reshape(1, -1)), dtype=float).ravel()
+            qm = np.asarray(self.model.Q.germ2variable((theta - e).reshape(1, -1)), dtype=float).ravel()
+            J[:, j] = (qp - qm) / (2 * h)
+        sign, logdet = np.linalg.slogdet(J)
+        return logdet if sign != 0 else np.inf
     
     def get_indices_from_mx(self, H):
         """ Get the indices of parameters and measurements from the mapping matrix H
@@ -314,3 +417,8 @@ class DigitalTwin:
                 y_indices.append(np.where(H[i, :]==1)[0][0])
 
         return q_indices, y_indices
+
+
+    def plot_MCMC(self, X_train, extra_point=None, extra_point_name='Extra point', map=True, custom_xlim=None, custom_ylim=None):
+        fig = MCMC_plot(self, X_train, extra_point=extra_point, extra_point_name=extra_point_name, map=map, custom_xlim=custom_xlim, custom_ylim=custom_ylim)
+        return fig

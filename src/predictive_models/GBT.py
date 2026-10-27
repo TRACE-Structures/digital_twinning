@@ -4,12 +4,11 @@ import pandas as pd
 import numpy as np
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_squared_error
-from digital_twinning.utils.gbt_plot_utils import *
-import digital_twinning.utils.utils as utils
+from .utils import get_scaler
 import shap
 
 
-class GBTModel(PredictiveModel):
+class GBT(PredictiveModel):
     '''
     Gradient Boosted Trees (GBT) model class for regression and classification tasks.
     Supports multiple GBT implementations: scikit-learn, XGBoost, CatBoost, and LightGBM.
@@ -59,7 +58,7 @@ class GBTModel(PredictiveModel):
 
 
     def train(self, q_train, y_train, k_fold=None):
-        self.scaler = utils.get_scaler("identity")
+        self.scaler = get_scaler("identity")
 
         xi = self.get_scaled(q_train)
         yt = self.get_scaled(y_train)
@@ -148,14 +147,14 @@ class GBTModel(PredictiveModel):
         if max_index > 2:
             print(f'Warning: The maximum value of max_index for GBTModel is 2. It is automatically set to 2.')
             max_index = 2
-        partial_var_df, sobol_index_df = super(GBTModel, self).get_sobol_sensitivity(max_index)
+        partial_var_df, sobol_index_df = super(GBT, self).get_sobol_sensitivity(max_index)
         return partial_var_df, sobol_index_df
 
     def plot_sobol_sensitivity(self, y_train, max_index=1, param_name=None):
         if max_index > 2:
             print(f'Warning: The maximum value of max_index for GBTModel is 2. It is automatically set to 2.')
             max_index = 2
-        fig = super(GBTModel, self).plot_sobol_sensitivity(y_train, max_index, param_name)
+        fig = super(GBT, self).plot_sobol_sensitivity(y_train, max_index, param_name)
         return fig
 
     def get_orig(self, scaled):
