@@ -1,7 +1,7 @@
 Mixture Density Network
 =======================
 
-.. automodule:: digital_twinning.probabilistic_models.mdn_model
+.. automodule:: digital_twinning.probabilistic_models.MDN
    :members:
    :show-inheritance:
    :undoc-members:
