@@ -237,7 +237,7 @@ class MOSAIC(PredictiveModel):
         shap_values = self.explainer(q, silent=silent)
         return shap_values
 
-    def plot_variable_space_exploration(self, mode, n_samples=1000):
+    def plot_variable_space_exploration(self, mode):
         """ Plot the variable space exploration for a Mosaic model. Returns three figures:
                 1. Space division plot
                 2. Reference eigenvectors plot

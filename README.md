@@ -1,110 +1,106 @@
-![Logo](https://raw.githubusercontent.com/TRACE-Structures/digital_twinning/main/docs/digital_twinning_logo.png)
+![Digital Twinning](https://raw.githubusercontent.com/TRACE-Structures/digital_twinning/main/docs/digital_twinning_logo.png)
 
-# digital_twinning
+# Digital Twinning
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.17990407-blue)](https://doi.org/10.5281/zenodo.17990407)
 [![Read the Docs](https://img.shields.io/readthedocs/digital-twinning?style=flat&logo=readthedocs)](https://digital-twinning.readthedocs.io/en/latest/)
 [![PyPI - Version](https://img.shields.io/pypi/v/digital-twinning?style=flat)](https://pypi.org/project/digital-twinning/)
 
+A Python package for predictive modeling, probabilistic inference, and Bayesian model updating for digital-twin applications.
 
-A comprehensive Python package for digital twin model updating and predictive modeling using machine learning and uncertainty quantification techniques.
-
-- Website: [https://buildchain.ilab.sztaki.hu/](https://buildchain.ilab.sztaki.hu/)
-- Source code: [https://github.com/TRACE-Structures/digital_twinning](https://github.com/TRACE-Structures/digital_twinning)
-- Bug reports: [https://github.com/TRACE-Structures/digital_twinning/issues](https://github.com/TRACE-Structures/digital_twinning/issues)
+- Website: [BUILDCHAIN](https://buildchain.ilab.sztaki.hu/)
+- Source code: [TRACE-Structures/digital_twinning](https://github.com/TRACE-Structures/digital_twinning)
+- Documentation: [Read the Docs](https://digital-twinning.readthedocs.io/en/latest/)
+- Bug reports: [GitHub Issues](https://github.com/TRACE-Structures/digital_twinning/issues)
 
 ## Overview
 
-The Digital Twinning package provides tools for creating data-driven predictive models and updating them with measurement data using Bayesian inference (MCMC). It combines surrogate modeling, machine learning, and probabilistic model updating for structural health monitoring and digital twin applications.
+The package combines machine-learning surrogate models, probabilistic models, and MCMC-based parameter estimation. It is intended for workflows where model predictions are trained from simulation or measurement data and then updated using observed quantities of interest.
+
+Inputs and outputs are represented using `pandas.DataFrame` objects in the predictive-model workflows. Model parameters are described with `VariableSet` objects from the `uncertain_variables` package.
+
+## Features
+
+### Predictive models
+
+The `digital_twinning.predictive_models` package provides:
+
+- **DNN** — feed-forward neural-network regression with configurable hidden layers, activations, dropout, and optional cross-validation.
+- **GBT** — gradient-boosted regression using XGBoost.
+- **LinReg** — linear regression baseline.
+- **gPCE** — generalized Polynomial Chaos Expansion through `gPCE_model`.
+- **MOSAIC** — surrogate modeling through the `mosaictools` package.
+
+Predictive models share a common interface for training and prediction. The base class also provides evaluation, cross-validation, model serialization, and sensitivity-analysis functionality. SHAP computation is implemented by individual model classes where supported.
+
+### Probabilistic models
+
+The `digital_twinning.probabilistic_models` package includes:
+
+- **MDN** — a mixture-density network for modeling conditional distributions.
+- **CRPS** — a probabilistic neural model trained using the Continuous Ranked Probability Score.
+
+These models provide an `inference` method for generating samples conditioned on input features.
+
+### Bayesian model updating
+
+The `digital_twinning.model_updating` package includes:
+
+- **DigitalTwin** — updates one predictive model against measured quantities using MCMC sampling with `emcee`. It supports posterior samples, posterior summaries, MAP estimation, and plotting.
+- **JointManager** — performs joint updates for multiple models with shared parameters and provides per-model posterior summaries and samples.
+
+### Data and visualization utilities
+
+The `digital_twinning.utils` package contains helpers for data preparation and visualization, including:
+
+- Reading and preprocessing modal-shape and weather data.
+- Merging, selecting, and filtering data columns and modes.
+- Converting mode-shape data to and from UNV-related representations.
+- Plotting model results, sensitivity analyses, and MCMC outputs.
 
 ## Installation
+
+Install the published package with pip:
 
 ```bash
 pip install digital-twinning
 ```
 
-## Features
+The package metadata lists dependencies including PyTorch, scikit-learn, XGBoost, `emcee`, `SALib`, `shap`, `gPCE-model`, `mosaictools`, and `uncertain-variables`. The project is distributed as `digital_twinning` version `2.0.0`.
 
-### Predictive Models
-- **Deep Neural Networks (DNN)**: Flexible neural network architectures with customizable layers and activation functions
-- **Gradient Boosted Trees (GBT)**: Support for multiple implementations (XGBoost, CatBoost, LightGBM, scikit-learn)
-- **Linear Regression**: Basic linear regression models for baseline comparisons
-- **gPCE Models**: Generalized Polynomial Chaos Expansion for uncertainty quantification
+## Source layout
 
-### Model Updating
-- **Bayesian Model Updating**: MCMC-based parameter estimation using emcee
-- **Multi-Building Updates**: Joint parameter estimation across multiple structures
-- **Prior and Posterior Analysis**: Tools for analyzing parameter distributions
+```text
+src/
+├── model_updating/       # DigitalTwin and JointManager
+├── predictive_models/    # DNN, GBT, LinReg, gPCE, MOSAIC
+├── probabilistic_models/ # MDN and CRPS
+└── utils/                # Data processing and plotting helpers
+```
 
-### Model Interpretability
-- **SHAP Analysis**: Feature importance and explanation using SHAP values
-- **Sobol Sensitivity Analysis**: Global sensitivity analysis for parameter importance
-- **Visualization Tools**: Comprehensive plotting utilities for model analysis
+## Examples
 
-## Key Classes
+The repository includes notebooks demonstrating package workflows under [demo/notebooks](https://github.com/TRACE-Structures/digital_twinning/tree/main/demo/notebooks).
 
-### PredictiveModel
-The base class for all predictive models. Supports training, prediction, cross-validation, and model interpretability.
-
-**Methods:**
-- `train()`: Train the model with optional k-fold cross-validation
-- `predict()`: Make predictions on new data
-- `get_shap_values()`: Compute SHAP values for feature importance
-- `get_sobol_sensitivity()`: Perform Sobol sensitivity analysis
-- `save_model()` / `load_model()`: Serialize and deserialize models
-
-### DigitalTwin
-MCMC-based Bayesian model updating for parameter estimation.
-
-**Methods:**
-- `update()`: Update parameters using measurement data
-- `get_mean_and_var_of_posterior()`: Get posterior statistics
-- `get_MAP()`: Get maximum a posteriori estimate
-- `loglikelihood()`: Compute log-likelihood of measurements
-- `logprior()`: Compute log-prior of parameters
-
-### JointManager
-Manage joint model updating for multiple buildings with shared parameters.
-
-**Methods:**
-- `update()`: Perform joint update across all buildings
-- `get_joint_paramset_and_indices()`: Create joint parameter space
-- `generate_joint_stdrn_simparamset()`: Generate joint simulation parameter sets
-
-### DNNModel
-Deep Neural Network implementation with PyTorch backend.
-
-**Features:**
-- Flexible architecture with customizable layers
-- Multiple activation functions (ReLU, GELU, Tanh, etc.)
-- Dropout regularization
-- Early stopping
-- GPU support
-
-### GBTModel
-Gradient Boosted Decision Trees with multiple backend options.
-
-**Supported Backends:**
-- XGBoost
-- CatBoost
-- LightGBM
-- scikit-learn GradientBoostingRegressor
+These notebooks are the best starting point for seeing how the models are configured and used with the project’s example datasets.
 
 ## Authors and acknowledgment
 
-The code is developed by András Urbanics, Áron Friedman, Bence Popovics, Emese Vastag, Elmar Zander and Noémi Friedman in the TRACE-Structures group.
+Developed by András Urbanics, Áron Friedman, Bence Popovics, Emese Vastag, and Noémi Friedman in the TRACE-Structures group.
 
 This work was funded by the European Commission through the Horizon Europe Innovation Action [BUILDCHAIN](https://buildchain-project.eu/) (grant agreement No. 101092052) up to and including v1.0.0, and by the PRODIGI project from later versions onward.
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 (GPL-3.0-only). See the [LICENSE](https://github.com/TRACE-Structures/digital_twinning/tree/main?tab=GPL-3.0-1-ov-file) file for details.
+This project is licensed under the GNU General Public License v3.0 only. See the [LICENSE](LICENSE) file for details.
 
-## Related Projects
+## Related projects
 
-- [gPCE_model](https://github.com/TRACE-Structures/gPCE_model/): Generalized Polynomial Chaos Expansion
-- [uncertain_variables](https://github.com/TRACE-Structures/uncertain_variables/): Probabilistic variable management
+- [uncertain_variables](https://github.com/TRACE-Structures/uncertain_variables/) — probabilistic variable management.
+- [gPCE_model](https://github.com/TRACE-Structures/gPCE_model/) — generalized Polynomial Chaos Expansion.
+- [mosaictools](https://github.com/blazkurent/mosaictools) - a Python toolkit for surrogate modeling of modal properties using the MOSAIC method.
 
 ## Support
 
-For issues, questions, or contributions, please refer to the project repository or contact the authors.
+For bug reports and questions, use the [project issue tracker](https://github.com/TRACE-Structures/digital_twinning/issues).
+```
