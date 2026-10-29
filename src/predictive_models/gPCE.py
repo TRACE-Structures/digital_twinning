@@ -9,6 +9,19 @@ from gPCE_model import gpc_multiindex2param_names
 import datetime
 
 class gPCE(PredictiveModel):
+    """ gPCE model class for predictive modeling.
+
+        Attributes
+        ----------
+        Q : VariableSet
+            Variable set defining the input features.
+        QoI_names : list
+            List of Quantity of Interest (QoI) names.
+        p : int
+            Polynomial order for the gPCE model.
+        model : GpcModel
+            Instance of the gPCE model.
+    """
 
     def __init__(self, Q, QoI_names, p=4):
         '''
@@ -32,6 +45,17 @@ class gPCE(PredictiveModel):
         self.model = GpcModel(Q, p)
 
     def train(self, q_train, y_train, k_fold=None):
+        """ Trains the gPCE model with optional k-fold cross-validation.
+
+            Parameters
+            ----------
+            q_train : array_like or pandas.DataFrame
+                Training input features.
+            y_train : array_like or pandas.DataFrame
+                Training target features.
+            k_fold : int, optional
+                Number of folds for cross-validation. Default is None (no cross-validation).
+        """
 
         xi = q_train.values
         yt = y_train.values
@@ -49,11 +73,43 @@ class gPCE(PredictiveModel):
 
 
     def train_and_validate(self, xi_train, yt_train, xi_val, yt_val):
+        """ Trains the gPCE model on the training set and validates it on the validation set.
+
+            Parameters
+            ----------
+            xi_train : array_like
+                Training input features.
+            yt_train : array_like
+                Training target features.
+            xi_val : array_like
+                Validation input features.
+            yt_val : array_like
+                Validation target features.
+
+            Returns
+            -------
+            tr_loss : float
+                Training loss.
+            vl_loss : float
+                Validation loss.
+        """
         tr_loss, vl_loss = self.model.train_and_evaluate(xi_train, yt_train, xi_val, yt_val)
         return tr_loss, vl_loss
 
 
     def predict(self, q):
+        """ Predicts the target features for the given input features using the trained gPCE model.
+
+            Parameters
+            ----------
+            q : array_like or pandas.DataFrame
+                Input features for prediction.
+
+            Returns
+            -------
+            y : array_like
+                Predicted target features.
+        """
         if type(q) != pd.DataFrame:
             q = pd.DataFrame(q, columns=self.Q.variable_names())
         xi = q.values
@@ -168,6 +224,28 @@ class gPCE(PredictiveModel):
 
 
     def to_jsonld(self, model_id=None, building_did=None, building_ual=None, name=None, doc_type=None, description=None):
+        """ Converts the gPCE model to JSON-LD format.
+
+            Parameters
+            ----------
+            model_id : str, optional
+                Identifier for the model.
+            building_did : str, optional
+                Decentralized identifier for the building.
+            building_ual : str, optional
+                Uniform Asset Locator for the building.
+            name : str, optional
+                Name of the model.
+            doc_type : str, optional
+                Document type.
+            description : str, optional
+                Description of the model.
+
+            Returns
+            -------
+            jsonld : dict
+                JSON-LD representation of the gPCE model.
+        """
 
         hyperparameters = [
             {

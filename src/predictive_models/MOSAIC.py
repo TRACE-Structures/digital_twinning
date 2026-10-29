@@ -13,7 +13,48 @@ EIGVEC_RE = re.compile(r"^S\.(\d+)\.(\d+)\.([xyzXYZ])$")
 _DIR_PRIORITY = {"x": 0, "y": 1, "z": 2}  # preferred display order when inferring
 
 class MOSAIC(PredictiveModel):
+    """ MOSAIC predictive model class for handling frequency and eigenvector data.
+    
+        Attributes
+        ----------
+        Q : object
+            Input feature data.
+        QoI_names : list
+            Names of the quantities of interest.
+        resolution : float
+            Resolution parameter for the MOSAIC model.
+        max_freq_degree : int
+            Maximum degree for frequency features.
+        max_vect_degree : int
+            Maximum degree for eigenvector features.
+        classification_method : str
+            Classification method used in the MOSAIC model.
+        class_kwargs : dict
+            Additional keyword arguments for the classification method.
+        model : Mosaic
+            The underlying MOSAIC model instance.
+    """
     def __init__(self, Q, QoI_names, resolution=0.6, max_freq_degree=4, max_vect_degree=5, classification_method='svc', **class_kwargs):
+        """
+        Initializes the MOSAIC predictive model with the given parameters.
+
+        Parameters
+        ----------
+        Q : object
+            Input feature data.
+        QoI_names : list
+            Names of the quantities of interest.
+        resolution : float, optional
+            Resolution parameter for the MOSAIC model. Default is 0.6.
+        max_freq_degree : int, optional
+            Maximum degree for frequency features. Default is 4.
+        max_vect_degree : int, optional
+            Maximum degree for eigenvector features. Default is 5.
+        classification_method : str, optional
+            Classification method used in the MOSAIC model. Default is 'svc'.
+        **class_kwargs : dict, optional
+            Additional keyword arguments for the classification method.
+        """
         self.Q = Q
         self.resolution = resolution
         self.max_freq_degree = max_freq_degree
@@ -27,11 +68,27 @@ class MOSAIC(PredictiveModel):
 
     def reorder_header(self, columns, m=None, n=None, directions=None):
         """
-        Validate that `columns` contains exactly the expected set of
-        'f.<i>' and 'S.<i>.<j>.<d>' columns for m modes, n nodes, and the
-        given directions -- in ANY order -- and return them reordered into
-        canonical order. Raises ValueError on any unrecognized, missing,
-        or out-of-range column.
+            Validate that `columns` contains exactly the expected set of
+            'f.<i>' and 'S.<i>.<j>.<d>' columns for m modes, n nodes, and the
+            given directions -- in ANY order -- and return them reordered into
+            canonical order. Raises ValueError on any unrecognized, missing,
+            or out-of-range column.
+
+            Parameters
+            ----------
+            columns : list of str
+                List of column names to validate and reorder.
+            m : int, optional
+                Number of frequency modes. If None, inferred from the columns.
+            n : int, optional
+                Number of nodes. If None, inferred from the columns.
+            directions : list of str, optional
+                List of directions. If None, inferred from the columns.
+
+            Returns
+            -------
+            list of str
+                Reordered list of column names in canonical order.
         """
         columns = list(columns)
 
@@ -97,14 +154,48 @@ class MOSAIC(PredictiveModel):
         return expected_freq + [f"S.{i}.{j}.{d}" for (i, j, d) in expected_eigvec]
 
     def reorder_dataframe(self, df, m=None, n=None, directions=None):
-        """Returns df with columns reordered canonically. Raises ValueError if invalid."""
+        """ Returns df with columns reordered canonically. Raises ValueError if invalid.
+
+            Parameters
+            ----------
+            df : pandas.DataFrame
+                Input DataFrame to reorder.
+            m : int, optional
+                Number of frequency modes. If None, inferred from the DataFrame.
+            n : int, optional
+                Number of nodes. If None, inferred from the DataFrame.
+            directions : list of str, optional
+                List of directions. If None, inferred from the DataFrame.
+
+            Returns
+            -------
+            pandas.DataFrame
+                DataFrame with columns reordered canonically.
+        """
         order = self.reorder_header(df.columns, m=m, n=n, directions=directions)
         return df[order]
 
     def _infer_dims(self, columns, directions=None):
-        """Infer (m, n, directions) from column names, without validation.
+        """ Infer (m, n, directions) from column names, without validation.
         Assumes the columns already form a complete, correctly named set
-        (e.g. as returned by reorder_dataframe)."""
+        (e.g. as returned by reorder_dataframe).
+
+            Parameters
+            ----------
+            columns : list of str
+                List of column names to infer dimensions from.
+            directions : list of str, optional
+                List of directions. If None, inferred from the columns.
+
+            Returns
+            -------
+            m : int
+                Number of frequency modes.
+            n : int
+                Number of nodes.
+            directions : list of str
+                List of directions in canonical order.
+        """
         columns = list(columns)
         m = 0
         for col in columns:
@@ -129,16 +220,27 @@ class MOSAIC(PredictiveModel):
 
     def extract_arrays(self, df, m=None, n=None, directions=None):
         """
-        Extract frequencies and eigenvectors from a DataFrame whose header is
-        already known-valid and in canonical order (e.g. the output of
-        reorder_dataframe). Does NOT re-validate the header.
+            Extract frequencies and eigenvectors from a DataFrame whose header is
+            already known-valid and in canonical order (e.g. the output of
+            reorder_dataframe). Does NOT re-validate the header.
 
-        Returns
-        -------
-        frequencies : ndarray, shape (n_samples, n_modes)
-        eigenvectors: ndarray, shape (n_samples, n_modes, n_nodes * n_directions)
-            Last axis ordered as: all nodes for direction[0], then all nodes for
-            direction[1], ... i.e. [d0_node1, ..., d0_nodeN, d1_node1, ..., dD_nodeN]
+            Parameters
+            ----------
+            df : pandas.DataFrame
+                DataFrame containing the frequency and eigenvector data.
+            m : int, optional
+                Number of frequency modes. If None, inferred from the DataFrame columns.
+            n : int, optional
+                Number of nodes. If None, inferred from the DataFrame columns.
+            directions : list of str, optional
+                List of directions. If None, inferred from the DataFrame columns.
+
+            Returns
+            -------
+            frequencies : ndarray, shape (n_samples, n_modes)
+            eigenvectors: ndarray, shape (n_samples, n_modes, n_nodes * n_directions)
+                Last axis ordered as: all nodes for direction[0], then all nodes for
+                direction[1], ... i.e. [d0_node1, ..., d0_nodeN, d1_node1, ..., dD_nodeN]
         """
         m, n, directions = self._infer_dims(df.columns, directions=directions) if (m is None or n is None or directions is None) \
             else (m, n, [d.lower() for d in directions])
@@ -155,6 +257,21 @@ class MOSAIC(PredictiveModel):
         return frequencies, eigenvectors
 
     def train(self, q_train, y_train, k_fold=None):
+        """ Trains the Mosaic model using the provided training data.
+
+            Parameters
+            ----------
+            q_train : array-like
+                Input feature data for training.
+            y_train : array-like
+                Target data for training.
+            k_fold : int, optional
+                Number of folds for cross-validation. If None, no cross-validation is performed.
+
+            Returns
+            -------
+            None
+        """
 
         xi = q_train
         yt = y_train
@@ -172,6 +289,26 @@ class MOSAIC(PredictiveModel):
 
 
     def train_and_validate(self, X_train, y_train, X_val, y_val):
+        """ Trains the model on the provided training and validation data and computes the training and validation loss.
+
+            Parameters
+            ----------
+            X_train : array-like
+                Input feature data for training.
+            y_train : array-like
+                Target data for training.
+            X_val : array-like
+                Input feature data for validation.
+            y_val : array-like
+                Target data for validation.
+
+            Returns
+            -------
+            tr_loss : float
+                Training loss.
+            vl_loss : float
+                Validation loss.
+        """
         # if isinstance(X_train, pd.DataFrame):
         X_train = X_train.values
         y_train = self.reorder_dataframe(y_train)
@@ -189,6 +326,21 @@ class MOSAIC(PredictiveModel):
         return tr_loss, vl_loss
 
     def numpy_train(self, X_train, train_freq, train_eig):
+        """ Trains the model using the provided training data in structured NumPy arrays.
+
+            Parameters
+            ----------
+            X_train : array-like
+                Input feature data for training.
+            train_freq : array-like
+                Frequency data for training.
+            train_eig : array-like
+                Eigenvector data for training.
+
+            Returns
+            -------
+            None
+        """
         self.model.fit(X_train, train_freq, train_eig)
 
 

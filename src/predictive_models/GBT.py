@@ -1,5 +1,4 @@
 from .PredictiveModel import PredictiveModel
-
 import pandas as pd
 import numpy as np
 from xgboost import XGBRegressor
@@ -58,6 +57,17 @@ class GBT(PredictiveModel):
 
 
     def train(self, q_train, y_train, k_fold=None):
+        """ Trains the GBT model with optional k-fold cross-validation.
+
+            Parameters
+            ----------
+            q_train : array_like or pandas.DataFrame
+                Training input features.
+            y_train : array_like or pandas.DataFrame
+                Training target features.
+            k_fold : int, optional
+                Number of folds for cross-validation. Default is None (no cross-validation).
+        """
         self.scaler = get_scaler("identity")
 
         xi = self.get_scaled(q_train)
@@ -77,6 +87,26 @@ class GBT(PredictiveModel):
 
 
     def train_and_validate(self, X_train, y_train, X_val, y_val):
+        """ Trains the GBT model on the training set and validates it on the validation set.
+
+            Parameters
+            ----------
+            X_train : array_like or pandas.DataFrame
+                Training input features.
+            y_train : array_like or pandas.DataFrame
+                Training target features.
+            X_val : array_like or pandas.DataFrame
+                Validation input features.
+            y_val : array_like or pandas.DataFrame
+                Validation target features.
+
+            Returns
+            -------
+            train_loss : float
+                Mean squared error on the training set.
+            val_loss : float
+                Mean squared error on the validation set.
+        """
 
         X_train, X_val = pd.DataFrame(X_train, columns=self.Q.variable_names()), pd.DataFrame(X_val, columns=self.Q.variable_names())
         y_train, y_val = pd.DataFrame(y_train, columns=self.QoI_names), pd.DataFrame(y_val, columns=self.QoI_names)                 
@@ -94,6 +124,18 @@ class GBT(PredictiveModel):
 
 
     def predict(self, X):
+        """ Predicts the target features for the given input features.
+
+            Parameters
+            ----------
+            X : array_like or pandas.DataFrame
+                Input features for prediction.
+
+            Returns
+            -------
+            pred : array_like
+                Predicted target features.
+        """
 
         if type(X) != pd.DataFrame:
             X = pd.DataFrame(X, columns=self.Q.variable_names())
@@ -144,6 +186,20 @@ class GBT(PredictiveModel):
         return shap_values
 
     def get_sobol_sensitivity(self, max_index=1):
+        """ Computes the Sobol sensitivity indices for the model.
+
+            Parameters
+            ----------
+            max_index : int, optional
+                Maximum order of Sobol indices to compute. Default is 1.
+
+            Returns
+            -------
+            partial_var_df : pd.DataFrame
+                DataFrame containing partial variances.
+            sobol_index_df : pd.DataFrame
+                DataFrame containing Sobol sensitivity indices.
+        """
         if max_index > 2:
             print(f'Warning: The maximum value of max_index for GBTModel is 2. It is automatically set to 2.')
             max_index = 2
@@ -151,6 +207,22 @@ class GBT(PredictiveModel):
         return partial_var_df, sobol_index_df
 
     def plot_sobol_sensitivity(self, y_train, max_index=1, param_name=None):
+        """ Plots the Sobol sensitivity indices for the model.
+
+            Parameters
+            ----------
+            y_train : array_like or pandas.DataFrame
+                Training target features.
+            max_index : int, optional
+                Maximum order of Sobol indices to plot. Default is 1.
+            param_name : str, optional
+                Name of the parameter to highlight in the plot.
+
+            Returns
+            -------
+            fig : matplotlib.figure.Figure
+                Figure object containing the Sobol sensitivity plot.
+        """
         if max_index > 2:
             print(f'Warning: The maximum value of max_index for GBTModel is 2. It is automatically set to 2.')
             max_index = 2
@@ -158,9 +230,33 @@ class GBT(PredictiveModel):
         return fig
 
     def get_orig(self, scaled):
+        """ Inversely transforms the scaled features back to their original scale.
+
+            Parameters
+            ----------
+            scaled : array_like
+                Scaled features to be transformed.
+
+            Returns
+            -------
+            original : array_like
+                Original features.
+        """
         original = self.scaler.inverse_transform(scaled)
         return original
 
     def get_scaled(self, original):
+        """ Transforms the original features to their scaled representation.
+
+            Parameters
+            ----------
+            original : array_like
+                Original features to be scaled.
+
+            Returns
+            -------
+            scaled : array_like
+                Scaled features.
+        """
         scaled = self.scaler.transform(original)
         return scaled

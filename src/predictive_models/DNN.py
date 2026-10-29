@@ -38,6 +38,18 @@ class DNN(PredictiveModel):
         'leakyrelu', 'softmax', 'none').   '''
 
     def __init__(self, Q, QoI_names, layers, outputAF):
+        """ Initialize the DNN model.
+
+            Parameters
+            ----------
+            Q : object
+                Input feature space object
+            QoI_names : list of str
+                Names of the quantities of interest (output targets)
+            layers : list of dict
+                Configuration of hidden layers
+            outputAF : str
+                Activation function for the output layer """
         self.Q = Q
         self.QoI_names = QoI_names
         self.layers = layers
@@ -55,18 +67,16 @@ class DNN(PredictiveModel):
             Training input features
         y_train : pd.DataFrame
             Training target values
-        q_scaler : object
-            Scaler for input features (default is None)
-        y_scaler : object
-            Scaler for target values (default is None)
         k_fold : int
             Number of folds for cross-validation (default is None)
+        train_test_ratio : float, optional
+            Proportion of the dataset to include in the train split (default is 0.8)
+        random_seed : int, optional
+            Random seed for reproducibility (default is 1997)
+        split_type : str, optional
+            Type of train-test split ('no_shuffle', 'shuffle', etc.) (default is 'no_shuffle')
         **params : dict
-            Additional training parameters
-
-        Returns:
-        -------
-        None
+            Additional training parameters for the training process (e.g., loss function, optimizer, epochs, batch size)
         '''
 
         self.train_config = params
@@ -85,12 +95,54 @@ class DNN(PredictiveModel):
         print(f'----- Training ended for \'DNN\' model -----')
 
     def train_and_validate(self, xi_train, yt_train, xi_val, yt_val, loss='mse', optimizer='adam', epochs=5, batch_size=64, early_stopping=None):
+        """ Train and validate the DNN model.
+
+            Parameters
+            ----------
+            xi_train : torch.Tensor
+                Training input features
+            yt_train : torch.Tensor
+                Training target values
+            xi_val : torch.Tensor
+                Validation input features
+            yt_val : torch.Tensor
+                Validation target values
+            loss : str, optional
+                Loss function to use (default is 'mse')
+            optimizer : str, optional
+                Optimizer to use (default is 'adam')
+            epochs : int, optional
+                Number of training epochs (default is 5)
+            batch_size : int, optional
+                Batch size for training (default is 64)
+            early_stopping : dict, optional
+                Early stopping configuration (default is None)
+
+            Returns
+            -------
+            tr_loss : list of float
+                Training loss for each epoch
+            vl_loss : list of float
+                Validation loss for each epoch
+        """
         xi_tr,xi_vl = torch.tensor(xi_train, dtype=torch.float64), torch.tensor(xi_val, dtype=torch.float64)
         yt_tr,yt_vl = torch.tensor(yt_train, dtype=torch.float64), torch.tensor(yt_val, dtype=torch.float64)
         tr_loss, vl_loss = self.model.train_and_validate(xi_tr, yt_tr, xi_vl, yt_vl, loss=loss, optimizer=optimizer, epochs=epochs, batch_size=batch_size, early_stopping=early_stopping)
         return tr_loss, vl_loss
 
     def predict(self, q):
+        """ Predict the target values for the given input features.
+
+            Parameters
+            ----------
+            q : array_like or pandas.DataFrame
+                Input features for prediction
+
+            Returns
+            -------
+            y : array_like
+                Predicted target values
+        """
         if type(q) != pd.DataFrame:
             q = pd.DataFrame(q, columns=self.Q.variable_names())
         xi = self.get_scaled_q(q)
@@ -100,12 +152,54 @@ class DNN(PredictiveModel):
         return y
 
     def compute_shap_values(self, predict_fn, q, forced=False, explainer_type="kernelexplainer", silent=False):
+        """ Compute SHAP values for the given input features.
+
+            Parameters
+            ----------
+            predict_fn : callable
+                Prediction function to use for SHAP value computation
+            q : array_like or pandas.DataFrame
+                Input features for SHAP value computation
+            forced : bool, optional
+                Whether to force recomputation of SHAP values (default is False)
+            explainer_type : str, optional
+                Type of SHAP explainer to use (default is "kernelexplainer")
+            silent : bool, optional
+                Whether to suppress output messages (default is False)
+
+            Returns
+            -------
+            shap_values : array_like
+                Computed SHAP values for the input features
+        """
         shap_values = self.model.compute_shap_values(q, predict_fn=predict_fn, forced=forced, explainer_type=explainer_type, silent=silent)
         self.explainer = self.model.explainer
         return shap_values
 
     
     def to_jsonld(self, model_id=None, building_did=None, building_ual=None, name=None, doc_type=None, description=None):
+        """ Convert the DNN model to JSON-LD format.
+
+            Parameters
+            ----------
+            model_id : str, optional
+                Identifier for the model (default is None)
+            building_did : str, optional
+                Decentralized identifier for the building (default is None)
+            building_ual : str, optional
+                Uniform Asset Locator for the building (default is None)
+            name : str, optional
+                Name of the model (default is None)
+            doc_type : str, optional
+                Document type for the model (default is None)
+            description : str, optional
+                Description of the model (default is None)
+
+            Returns
+            -------
+            jsonld : dict
+                JSON-LD representation of the model
+        """
 
         hyperparameters = []
         hyperparameter_settings = []
@@ -190,15 +284,51 @@ class DNN(PredictiveModel):
         return jsonld
 
     def get_scaler(self, q):
+        """ Get a MinMaxScaler fitted to the input features.
+
+            Parameters
+            ----------
+            q : array_like or pandas.DataFrame
+                Input features to fit the scaler
+
+            Returns
+            -------
+            scaler : sklearn.preprocessing.MinMaxScaler
+                Fitted MinMaxScaler object
+        """
 
         scaler = MinMaxScaler((0.05, 0.95))
         scaler.fit(q)
         return scaler
 
     def get_scaled_q(self, q):
+        """ Get the scaled input features using the fitted MinMaxScaler.
+
+            Parameters
+            ----------
+            q : array_like or pandas.DataFrame
+                Input features to be scaled
+
+            Returns
+            -------
+            scaled_q : array_like
+                Scaled input features
+        """
         return self.q_scaler.transform(q)
 
     def get_scaled_y(self, y):
+        """ Get the scaled target features using the fitted MinMaxScaler.
+
+            Parameters
+            ----------
+            y : array_like or pandas.DataFrame
+                Target features to be scaled
+
+            Returns
+            -------
+            scaled_y : array_like
+                Scaled target features
+        """
         return self.y_scaler.transform(y)
 
     def get_orig_q(self, xi):
@@ -239,8 +369,36 @@ class DNN(PredictiveModel):
 
 
     class DNNInner(nn.Module):
+        """ Inner class representing the DNN model architecture.
+
+            Attributes
+            ----------
+            device : torch.device
+                Device on which the model is running (CPU or GPU)
+            hidden_layers : nn.Sequential
+                Sequential container for hidden layers
+            output_layer : nn.Sequential
+                Sequential container for the output layer
+            all_layers : nn.Sequential
+                Sequential container for all layers (hidden + output)
+            outputAF : nn.Module
+                Activation function for the output layer
+        """
         
         def __init__(self, input_size, output_size, layers, outputAF):
+            """ Initializes the DNNInner model.
+
+            Parameters
+            ----------
+            input_size : int
+                Number of input features
+            output_size : int
+                Number of output features
+            layers : list of dict
+                List of dictionaries specifying the hidden layers configuration
+            outputAF : str
+                Activation function for the output layer
+            """
             super().__init__()
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             default_neurons = 32

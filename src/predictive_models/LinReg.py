@@ -75,6 +75,17 @@ class LinReg(PredictiveModel):
         return tr_loss, vl_loss
 
     def train(self, q_train, y_train, k_fold=None):
+        """ Trains the Linear Regression model with optional k-fold cross-validation.
+
+            Parameters
+            ----------
+            q_train : array-like
+                Training input features.
+            y_train : array-like
+                Training target features.
+            k_fold : int, optional
+                Number of folds for cross-validation. Default is None (no cross-validation).
+        """
         self.scaler = get_scaler("identity")
 
         xi = self.get_scaled(q_train)
@@ -90,14 +101,6 @@ class LinReg(PredictiveModel):
             train_losses, val_losses = self.train_and_validate(xi_train, yt_train, xi_val, yt_val)
         print(f"Average train loss: {np.mean(train_losses):.14f}, Average valid loss: {np.mean(val_losses):.14f}")      
         print(f'----- Training ended for LinRegModel model -----')
-
-    # def plot_sobol_sensitivity(self, y_train, max_index=1, param_name=None):
-    #     if hasattr(self, 'max_index') == False:
-    #         self.max_index = max_index
-    #     if self.max_index < max_index:
-    #         self.get_sobol_sensitivity(max_index)
-    #     fig = utils.plot_sobol_sensitivity(self.sobol_index_df, y_train, param_name)
-    #     return fig
 
     def predict(self, X):
         '''
@@ -125,10 +128,34 @@ class LinReg(PredictiveModel):
         return y
 
     def get_orig(self, scaled):
+        """ Converts scaled data back to its original scale.
+
+            Parameters
+            ----------
+            scaled : array-like
+                Scaled data to be converted.
+
+            Returns
+            -------
+            original : array-like
+                Data in its original scale.
+        """
         original = self.scaler.inverse_transform(scaled)
         return original
 
     def get_scaled(self, original):
+        """ Converts data to its scaled representation using the scaler.
+
+            Parameters
+            ----------
+            original : array-like
+                Original data to be scaled.
+
+            Returns
+            -------
+            scaled : array-like
+                Scaled representation of the data.
+        """
         scaled = self.scaler.transform(original)
         return scaled
     
@@ -162,6 +189,28 @@ class LinReg(PredictiveModel):
         return shap_values
 
     def to_jsonld(self, model_id=None, building_did=None, building_ual=None, name=None, doc_type=None, description=None):
+        """ Converts the Linear Regression model to JSON-LD format.
+
+            Parameters
+            ----------
+            model_id : str, optional
+                Identifier for the model.
+            building_did : str, optional
+                Decentralized identifier for the building.
+            building_ual : str, optional
+                Uniform Asset Locator for the building.
+            name : str, optional
+                Name of the model.
+            doc_type : str, optional
+                Document type.
+            description : str, optional
+                Description of the model.
+
+            Returns
+            -------
+            jsonld : dict
+                JSON-LD representation of the Linear Regression model.
+        """
 
         mls_spec = {
             "@id": f"urn:implementation:{model_id}",

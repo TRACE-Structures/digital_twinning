@@ -259,13 +259,33 @@ class JointManager:
 
     # ------------------------------------------------------------------ helpers
     def _germ_to_model(self, theta, i):
-        """ Physical parameters of model i for joint germ vector(s) theta (n, n_joint) """
+        """ Physical parameters of model i for joint germ vector(s) theta (n, n_joint)
+        
+            Parameters
+            ----------
+            theta : array_like
+                Joint germ vector(s) of shape (n, n_joint)
+            i : int
+                Index of the model
+
+            Returns
+            -------
+            q : array_like
+                Physical parameters of model i corresponding to the joint germ vector(s) theta
+            """
         
         theta = np.atleast_2d(np.asarray(theta, dtype=float))
         return np.asarray(self.models[i].Q.germ2variable(theta[:, self.indices[i]]), dtype=float)
  
     def _variable_owner(self):
-        """ For each joint variable j: (model index i, local index k) of the first model using it """
+        """ For each joint variable j: (model index i, local index k) of the first model using it
+
+            Returns
+            -------
+            owner : list of tuples
+                List where each element corresponds to a joint variable j and contains a tuple
+                (i, k) indicating the first model i and local index k that uses this variable
+            """
         
         owner = [None] * self.Q.num_variables()
         for i, idx in enumerate(self.indices):
@@ -275,7 +295,17 @@ class JointManager:
         return owner
  
     def _joint_logprob(self, theta):
-        """ Joint log-posterior as a finite Python float (-inf outside the support) """
+        """ Joint log-posterior as a finite Python float (-inf outside the support) 
+        
+            Parameters
+            ----------
+            theta : array_like
+                Joint germ vector(s) of shape (n, n_joint)
+
+            Returns
+            -------
+            lp : float
+                Joint log-posterior evaluated at theta, -inf if outside the support """
         
         lp = np.asarray(self.get_logprob(np.asarray(theta, dtype=float)), dtype=float)
         if lp.size != 1:
@@ -289,7 +319,20 @@ class JointManager:
  
             Assumes independent variables (each germ2variable acts component-wise), so
             the Jacobian is diagonal. A joint variable shared by several models is
-            mapped with the first model that uses it (see _variable_owner). """
+            mapped with the first model that uses it (see _variable_owner).
+            
+            Parameters
+            ----------
+            theta : array_like
+                Joint germ vector(s) of shape (n, n_joint)
+            h : float, optional
+                Step size for central differences, by default 1e-6
+
+            Returns
+            -------
+            logdet : float
+                Logarithm of the absolute value of the determinant of the Jacobian, or inf if singular
+            """
         
         theta = np.asarray(theta, dtype=float).ravel()
         total = 0.0
@@ -352,7 +395,29 @@ class JointManager:
         return (map_df, best_lp) if return_logprob else map_df
  
     def _compute_joint_MAP(self, refine=True, n_starts=5, space='germ'):
-        """ Joint MAP in germ space (cached); returns (theta_map, log density) """
+        """ Joint MAP in germ space (cached); returns (theta_map, log density) 
+        
+            Parameters
+            ----------
+            refine : bool, optional
+                Refine the best samples with a local optimizer, by default True
+
+            n_starts : int, optional
+                Number of best distinct samples used as optimizer starts, by default 5
+
+            space : {'germ', 'physical'}, optional
+                Density that is maximized. 'germ' (default): the posterior density of
+                the joint germs the sampler works in. 'physical': the density of the
+                physical parameters (adds -log|det dq/dtheta|, see
+                _log_abs_det_jacobian). The modes differ for nonlinear maps.
+
+            Returns
+            -------
+            theta_map : array_like
+                Joint MAP estimate in germ space
+            log_density : float
+                Log density at the MAP estimate
+            """
         
         if space not in ('germ', 'physical'):
             raise ValueError("space must be 'germ' or 'physical'")
@@ -516,5 +581,27 @@ class JointManager:
         return post_samples_df
 
     def plot_multimodel_MCMC(self, extra_point=None, extra_point_name='Extra point', map_point=True, model_names=None, formatted_param_names=None, map_kwargs=None):
+        """ Plot the MCMC results for multiple models
+
+            Parameters
+            ----------
+            extra_point : array_like, optional
+                Additional point to be highlighted on the plot (default is None)
+            extra_point_name : str, optional
+                Name of the extra point for the plot legend (default is 'Extra point')
+            map_point : bool, optional
+                Whether to include the MAP estimate on the plot (default is True)
+            model_names : list of str, optional
+                Names of the models for the plot legend (default is None)
+            formatted_param_names : list of str, optional
+                Formatted parameter names for the plot (default is None)
+            map_kwargs : dict, optional
+                Additional keyword arguments for the MAP estimate plot (default is None)
+
+            Returns
+            -------
+            figs : list of matplotlib.figure.Figure
+                List of figure objects containing the MCMC plots for each model """
+        
         figs = multimodel_MCMC_plot(self, extra_point=extra_point, extra_point_name=extra_point_name, map_point=map_point, model_names=model_names, formatted_param_names=formatted_param_names, map_kwargs=map_kwargs)
         return figs

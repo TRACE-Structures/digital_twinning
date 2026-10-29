@@ -39,6 +39,12 @@ class DigitalTwin:
         self.Q = self.get_Q_germ()
 
     def get_Q_germ(self):
+        """ Generate the germ of the variable set Q based on the model's Q 
+
+            Returns
+            -------
+            Q_germ : VariableSet object
+                Germ of the variable set Q """
         
         Q_germ = uv.VariableSet()
         variable_names = self.model.Q.variable_names()
@@ -420,5 +426,27 @@ class DigitalTwin:
 
 
     def plot_MCMC(self, X_train, extra_point=None, extra_point_name='Extra point', map=True, custom_xlim=None, custom_ylim=None):
+        """ Plot the MCMC results for the given training data and optional extra point
+
+            Parameters
+            ----------
+            X_train : array_like
+                Training data used for MCMC sampling
+            extra_point : array_like, optional
+                Additional point to be highlighted on the plot (default is None)
+            extra_point_name : str, optional
+                Name of the extra point for the plot legend (default is 'Extra point')
+            map : bool, optional
+                Whether to include the MAP estimate on the plot (default is True)
+            custom_xlim : tuple, optional
+                Custom x-axis limits for the plot (default is None)
+            custom_ylim : tuple, optional
+                Custom y-axis limits for the plot (default is None)
+
+            Returns
+            -------
+            fig : matplotlib.figure.Figure
+                Figure object containing the MCMC plot """
+                
         fig = MCMC_plot(self, X_train, extra_point=extra_point, extra_point_name=extra_point_name, map=map, custom_xlim=custom_xlim, custom_ylim=custom_ylim)
         return fig

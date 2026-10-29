@@ -20,14 +20,65 @@ class PredictiveModel(ABC):
 
     @abstractmethod
     def train(self, q_train, y_train, k_fold=None, **params):
+        """ Trains the predictive model using the provided training data.
+
+            Parameters
+            ----------
+            q_train : array-like
+                Input feature data for training.
+            y_train : array-like
+                Target data for training.
+            k_fold : int, optional
+                Number of folds for cross-validation. If None, no cross-validation is performed.
+            **params : dict
+                Additional training parameters.
+
+            Returns
+            -------
+            None
+        """
         pass
 
     @abstractmethod
     def train_and_validate(self, xi_train, yt_train, xi_val, yt_val, **params):
+        """ Trains the predictive model on the provided training and validation data and computes the training and validation loss.
+
+            Parameters
+            ----------
+            xi_train : array-like
+                Input feature data for training.
+            yt_train : array-like
+                Target data for training.
+            xi_val : array-like
+                Input feature data for validation.
+            yt_val : array-like
+                Target data for validation.
+            **params : dict
+                Additional training parameters.
+
+            Returns
+            -------
+            tr_loss : float
+                Training loss.
+            vl_loss : float
+                Validation loss.
+        """
         pass
 
     @abstractmethod
     def predict(self, q):
+        """ Makes predictions using the trained predictive model.
+
+            Parameters
+            ----------
+            q : array-like
+                Input feature data for prediction.
+
+            Returns
+            -------
+            predictions : array-like
+                Predicted target values.
+        """
         pass
 
     def train_test_split(self, X_data, y_data, train_test_ratio=0.8, random_seed=1997, split_type='shuffle'):
@@ -100,6 +151,20 @@ class PredictiveModel(ABC):
         return train_losses, val_losses
 
     def get_mean_and_var(self, n_sample=1000):
+        """ Computes the mean and variance of the model predictions for a given number of samples.
+
+            Parameters
+            ----------
+            n_sample : int, optional
+                The number of samples to use for prediction (default is 1000).
+
+            Returns
+            -------
+            mean : array-like
+                Mean of the predicted target values.
+            var : array-like
+                Variance of the predicted target values.
+        """
         q = self.Q.sample(n_sample)
         q_df = pd.DataFrame(q, columns=self.Q.variable_names())
         y_predict = self.predict(q_df)
@@ -770,6 +835,22 @@ class PredictiveModel(ABC):
 
 
     def compute_partial_vars(self, max_index, n=8192):
+        """ Computes the partial variances and Sobol sensitivity indices for the predictive model.
+
+            Parameters
+            ----------
+            max_index : int
+                Maximum order of Sobol indices to compute (1 for first-order, 2 for second-order).
+            n : int, optional
+                Number of samples to use for the Sobol analysis (default is 8192).
+
+            Returns
+            -------
+            partial_var_df : pandas.DataFrame
+                DataFrame containing the partial variances for each input parameter and QoI.
+            sobol_index_df : pandas.DataFrame
+                DataFrame containing the Sobol sensitivity indices for each input parameter and QoI.
+        """
         variableset = self.Q
         d = variableset.num_variables()
 
@@ -832,6 +913,22 @@ class PredictiveModel(ABC):
 
 
     def plot_sobol_sensitivity(self, y_train, max_index=1, param_name=None):
+        """ Plots the Sobol sensitivity indices for the predictive model.
+
+            Parameters
+            ----------
+            y_train : array-like
+                Training target data.
+            max_index : int, optional
+                Maximum order of Sobol indices to compute (default is 1).
+            param_name : list of str, optional
+                Names of the input parameters for labeling the plot.
+
+            Returns
+            -------
+            fig : matplotlib.figure.Figure
+                Figure object containing the Sobol sensitivity plot.
+        """
         if hasattr(self, 'max_index') == False:
             self.max_index = max_index
         if self.max_index < max_index:

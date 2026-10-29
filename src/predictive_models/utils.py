@@ -40,6 +40,20 @@ def identity_inverse_func(x):
     return x
 
 def get_scaler(scale_method, y=None):
+    """ Returns a scaler object based on the specified scaling method.
+
+        Parameters
+        ----------
+        scale_method : str
+            Scaling method to use ('identity' or 'minmax').
+        y : array-like, optional
+            Target data for fitting the scaler (required for 'minmax' scaling).
+
+        Returns
+        -------
+        scaler : object
+            Scaler object corresponding to the specified scaling method.
+    """
 
     if scale_method == 'identity':
         scaler = FunctionTransformer(func=identity_func, inverse_func=identity_inverse_func)
