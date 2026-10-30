@@ -497,6 +497,7 @@ class DNN(PredictiveModel):
 
             # Define a mapping from string names to PyTorch optimizer functions
             optimizer_mapping = {
+                'adamw': optim.AdamW(self.parameters()),
                 'adam': optim.Adam(self.parameters()),
                 'RMSprop': optim.RMSprop(self.parameters())
             }

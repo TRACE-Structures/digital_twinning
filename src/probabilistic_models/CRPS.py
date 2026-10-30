@@ -8,8 +8,36 @@ from copy import deepcopy
 
 
 class CRPS(ProbabilisticModel):
+    """ CRPS (Continuous Ranked Probability Score) model for probabilistic forecasting.
+    This model uses a neural network with customizable layers and activation functions,
+    and incorporates the CRPS loss for training.
+
+        Attributes
+        ----------
+        Q : object
+            The probabilistic model for the quantity of interest.
+        QoI_names : list of str
+            Names of the quantities of interest.
+        layers : list of dict
+            Configuration of the neural network layers.
+        n_epsilon : int, optional
+            Number of epsilon samples for CRPS computation (default is 30).
+    """
 
     def __init__(self, Q, QoI_names, layers, n_epsilon=30):
+        """ Initialize the CRPS model.
+
+            Parameters
+            ----------
+            Q : object
+                The probabilistic model for the quantity of interest.
+            QoI_names : list of str
+                Names of the quantities of interest.
+            layers : list of dict
+                Configuration of the neural network layers.
+            n_epsilon : int, optional
+                Number of epsilon samples for CRPS computation (default is 30).
+        """
         self.Q = Q
         self.QoI_names = QoI_names
         self.layers = layers
@@ -17,11 +45,38 @@ class CRPS(ProbabilisticModel):
         self.n_epsilon = n_epsilon
 
     def inference(self, features, n_samples=2000):
+        """ Perform inference using the trained CRPS model.
+
+            Parameters
+            ----------
+            features : array-like
+                Input features for the model.
+            n_samples : int, optional
+                Number of samples to draw from the predictive distribution (default is 2000).
+
+            Returns
+            -------
+            array-like
+                Predicted samples for the quantities of interest.
+        """
         Xq = torch.tensor(self.q_scaler.transform(features), dtype=torch.float32)
         samples_scaled = self.model.predict(Xq, n_samples=n_samples)
         return self.y_scaler.inverse_transform(samples_scaled[0].numpy())
 
     def train(self, q, y, k_fold=None, **params):
+        """ Train the CRPS model.
+
+            Parameters
+            ----------
+            q : array-like
+                Input features for training.
+            y : array-like
+                Target values for training.
+            k_fold : int, optional
+                Number of folds for cross-validation (default is None).
+            **params : dict
+                Additional training parameters.
+        """
         q_train, q_val, y_train, y_val = self.train_test_split(q, y, train_test_ratio=0.8, random_seed=1997, split_type='no_shuffle')
 
         self.train_config = params
@@ -45,7 +100,34 @@ class CRPS(ProbabilisticModel):
         print(f'----- Training ended for \'CRPSModel\' model -----')
 
     class CRPSInner(nn.Module):
+        """ Inner neural network model for CRPS computation.
+
+            Attributes
+            ----------
+            device : torch.device
+                Device to run the model on (CPU or GPU).
+            hidden_layers : nn.Sequential
+                Sequential container of hidden layers in the network.
+            output_layer : nn.Linear
+                Final output layer of the network.
+            all_layers : nn.Sequential
+                Sequential container of all layers including hidden and output layers.
+            """
+        
         def __init__(self, input_size, output_size, layers, n_epsilon):
+            """ Initialize the CRPSInner model.
+
+                Parameters
+                ----------
+                input_size : int
+                    Number of input features.
+                output_size : int
+                    Number of output features.
+                layers : list of dict
+                    List of dictionaries specifying the hidden layers. Each dictionary should have keys 'neurons', 'activation', and 'dropout'.
+                n_epsilon : int
+                    Number of epsilon samples for CRPS computation.
+            """
             super().__init__()
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -94,38 +176,127 @@ class CRPS(ProbabilisticModel):
             self.to(self.device)
 
         def forward(self, x, n_samples=100):
+            """ Forward pass through the model.
+
+                Parameters
+                ----------
+                x : torch.Tensor
+                    Input tensor of shape [batch_size, input_size].
+                n_samples : int, optional
+                    Number of epsilon samples for CRPS computation, by default 100.
+
+                Returns
+                -------
+                torch.Tensor
+                    Output tensor of shape [batch_size, output_size].
+            """
             with crps.EpsilonSampler.n_samples(n_samples):
                 return self.all_layers(x)
 
         def loss_fn(self, xb, yb):
+            """ Compute the CRPS loss for a batch of data.
+
+                Parameters
+                ----------
+                xb : torch.Tensor
+                    Input tensor of shape [batch_size, input_size].
+                yb : torch.Tensor
+                    Target tensor of shape [batch_size, output_size].
+
+                Returns
+                -------
+                torch.Tensor
+                    Scalar tensor representing the mean CRPS loss for the batch.
+            """
             outputs = self(xb, n_samples=100)
             return crps.crps_loss_mv(outputs, yb).mean()
         
         def get_batch_ixs(self, like_tensor, batch_size=16, permute=True):
+            """ Generate batch indices for a given tensor.
+
+                Parameters
+                ----------
+                like_tensor : torch.Tensor
+                    Tensor whose first dimension determines the number of samples.
+                batch_size : int, optional
+                    Size of each batch, by default 16.
+                permute : bool, optional
+                    Whether to permute the indices, by default True.
+
+                Returns
+                -------
+                list of torch.Tensor
+                    List of index tensors for each batch.
+            """
             if like_tensor.shape[0] <= batch_size:
                 return torch.arange(like_tensor.shape[0]).unsqueeze(0)
             ixs = torch.randperm(like_tensor.shape[0]) if permute else torch.arange(like_tensor.shape[0])
             return torch.tensor_split(ixs, ixs.shape[0] // batch_size)
 
-        # def predict(self, X, n_samples=2000):
-        #     with torch.no_grad():
-        #         preds = self(X)
-        #     raw_samples = self.mdn_mv_util.sample(preds, n=n_samples)
-        #     samples_scaled = raw_samples.transpose(0, 1) if raw_samples.shape[0] == n_samples else raw_samples
-        #     return samples_scaled
-
         def predict(self, X, n_samples=2000):
+            """ Generate predictions for the given input tensor.
+
+                Parameters
+                ----------
+                X : torch.Tensor
+                    Input tensor of shape [batch_size, input_size].
+                n_samples : int, optional
+                    Number of epsilon samples for CRPS computation, by default 2000.
+
+                Returns
+                -------
+                torch.Tensor
+                    Output tensor of shape [batch_size, n_samples, output_size].
+            """
             with torch.no_grad():
                 samples_scaled = self(X, n_samples=n_samples)   # [1, n_samples, output_dim]
             return samples_scaled
 
         def train_and_validate(self, X_train, y_train, X_val, y_val, optimizer='adam', max_epoch=5, batch_size=64, lr=1e-3, weight_decay=1e-6, max_patience=2, verbose=False):
+            """ Train and validate the model.
+
+                Parameters
+                ----------
+                X_train : torch.Tensor
+                    Training input tensor.
+                y_train : torch.Tensor
+                    Training target tensor.
+                X_val : torch.Tensor
+                    Validation input tensor.
+                y_val : torch.Tensor
+                    Validation target tensor.
+                optimizer : str, optional
+                    Optimizer to use, by default 'adam'.
+                max_epoch : int, optional
+                    Maximum number of training epochs, by default 5.
+                batch_size : int, optional
+                    Batch size for training, by default 64.
+                lr : float, optional
+                    Learning rate, by default 1e-3.
+                weight_decay : float, optional
+                    Weight decay for optimizer, by default 1e-6.
+                max_patience : int, optional
+                    Maximum patience for early stopping, by default 2.
+                verbose : bool, optional
+                    Whether to print training progress, by default False.
+
+                Returns
+                -------
+                dict
+                    Training history containing epoch, train_loss, and val_loss.
+            """
             self.batch_size = batch_size
             
             X_train, y_train = X_train.to(self.device), y_train.to(self.device)
-            X_val, y_val = X_val.to(self.device), y_val.to(self.device)            
+            X_val, y_val = X_val.to(self.device), y_val.to(self.device)        
 
-            optimizer = torch.optim.AdamW(self.parameters(), lr=lr, weight_decay=weight_decay)
+            optimizer_mapping = {
+                'adamw': torch.optim.AdamW(self.parameters(), lr=lr, weight_decay=weight_decay),
+                'adam': torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay),
+                'RMSprop': torch.optim.RMSprop(self.parameters(), lr=lr, weight_decay=weight_decay)
+            }
+            optimizer = optimizer_mapping.get(optimizer.lower())
+
             scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.1, total_iters=10)
 
             best_val, best_state, bad_epochs = float("inf"), deepcopy(self.state_dict()), 0

@@ -9,20 +9,20 @@ import seaborn as sns
 
 def compute_dot_products(input_eigenvectors : np.ndarray, reference_eigenvectors: np.ndarray) -> np.ndarray:
     '''
-    Calculates dot products between eigenvectors and reference eigenvectors.
-    
-    Parameters
-    ----------
-    input_eigenvectors : ndarray of shape (n_samples, n_nodes)
-        Array of eigenvectors.
+        Calculates dot products between eigenvectors and reference eigenvectors.
         
-    reference_eigenvectors : ndarray of shape (n_clusters, n_nodes)
-        Array of reference_eigenvectors.
-        
-    Returns
-    -------
-    dot_product : ndarray of shape (n_samples, 1, n_clusters)
-        Matrix of dot products between input eigenvectors and typical eigenvectors.
+        Parameters
+        ----------
+        input_eigenvectors : ndarray of shape (n_samples, n_nodes)
+            Array of eigenvectors.
+            
+        reference_eigenvectors : ndarray of shape (n_clusters, n_nodes)
+            Array of reference_eigenvectors.
+            
+        Returns
+        -------
+        dot_product : ndarray of shape (n_samples, 1, n_clusters)
+            Matrix of dot products between input eigenvectors and typical eigenvectors.
     '''
     
     num_of_samples = input_eigenvectors.shape[0]
@@ -35,20 +35,20 @@ def compute_dot_products(input_eigenvectors : np.ndarray, reference_eigenvectors
 
 def flip_eigenvectors(input_eigenvectors: np.ndarray, reference_eigenvectors: np.ndarray | None = None) -> np.ndarray:
     '''
-    Flips eigenvectors by clusters to the direction of the typical eigenvectors.
-    
-    Parameters
-    ----------
-    input_eigenvectors : ndarray of shape (n_samples, n_nodes)
-        Array of eigenvectors.
+        Flips eigenvectors by clusters to the direction of the typical eigenvectors.
         
-    reference_eigenvectors : ndarray of shape (n_clusters, n_nodes), default=None
-        Array of reference_eigenvectors.
-    
-    Returns
-    -------
-    flipped_eigenvectors : ndarray
-        Flipped versions of the input eigenvectors.
+        Parameters
+        ----------
+        input_eigenvectors : ndarray of shape (n_samples, n_nodes)
+            Array of eigenvectors.
+            
+        reference_eigenvectors : ndarray of shape (n_clusters, n_nodes), default=None
+            Array of reference_eigenvectors.
+        
+        Returns
+        -------
+        flipped_eigenvectors : ndarray
+            Flipped versions of the input eigenvectors.
     '''
     
     input_eigenvectors = np.expand_dims(input_eigenvectors, axis=1)
@@ -68,7 +68,7 @@ modeshape_cols = ['frequency'] + sensor_cols
 
 def df_from_unv(unv_filename):
     """
-    Reads a UNV file and returns a Pandas DataFrame with the data.
+        Reads a UNV file and returns a Pandas DataFrame with the data.
     """
     extracted_data = []
     try:
@@ -81,7 +81,7 @@ def df_from_unv(unv_filename):
                 r1_data = dataset.get('r1')
                 r2_data = dataset.get('r2')
                 frequency = dataset.get('freq', 0.0)
-                xi = dataset.get('modal_damp_vis', 0.0) 
+                xi = dataset.get('modal_damp_vis', 0.0)
                 mode_id = dataset.get('mode_n', 0)
                 time = dataset.get('id1', None)
 
@@ -112,17 +112,17 @@ def df_from_unv(unv_filename):
 
 def preprocess_weather_data(weather_file, time_column='date'):
     '''
-    Preprocesses the weather data from a CSV file.
+        Preprocesses the weather data from a CSV file.
 
-    Parameters:
-    -----------
-        weather_file: str
-            path to the weather CSV file
+        Parameters:
+        -----------
+            weather_file: str
+                path to the weather CSV file
 
-    Returns:
-    --------
-        weather_df: pd.DataFrame
-            preprocessed weather DataFrame
+        Returns:
+        --------
+            weather_df: pd.DataFrame
+                preprocessed weather DataFrame
     '''
 
     weather_df = pd.read_csv(weather_file, index_col=None)
@@ -134,17 +134,17 @@ def preprocess_weather_data(weather_file, time_column='date'):
 
 def preprocess_weather_df(df, time_column='date'):
     '''
-    Preprocesses the weather data from a DataFrame.
+        Preprocesses the weather data from a DataFrame.
 
-    Parameters:
-    -----------
-        df: pd.DataFrame
-            weather DataFrame
+        Parameters:
+        -----------
+            df: pd.DataFrame
+                weather DataFrame
 
-    Returns:
-    --------
-        weather_df: pd.DataFrame
-            preprocessed weather DataFrame
+        Returns:
+        --------
+            weather_df: pd.DataFrame
+                preprocessed weather DataFrame
     '''
     weather_df = df.copy()
     if time_column == weather_df.index.name:
@@ -157,19 +157,19 @@ def preprocess_weather_df(df, time_column='date'):
 
 def merge_dataframes(df_modeshapes, df_weather, time_column='Datetime'):
     '''
-    Merges mode shape DataFrame with weather DataFrame based on nearest timestamps.
+        Merges mode shape DataFrame with weather DataFrame based on nearest timestamps.
 
-    Parameters:
-    -----------
-        df_modeshapes: pd.DataFrame 
-            Dataframe containing mode shape data
-        df_weather: pd.DataFrame 
-            Dataframe containing weather data
+        Parameters:
+        -----------
+            df_modeshapes: pd.DataFrame 
+                Dataframe containing mode shape data
+            df_weather: pd.DataFrame 
+                Dataframe containing weather data
 
-    Returns:
-    --------
-        merged_df: pd.DataFrame
-            Merged DataFrame
+        Returns:
+        --------
+            merged_df: pd.DataFrame
+                Merged DataFrame
     '''
     if time_column in df_modeshapes.columns and time_column in df_weather.columns:
         df_a = df_modeshapes.sort_values(by=time_column)
@@ -184,17 +184,17 @@ def merge_dataframes(df_modeshapes, df_weather, time_column='Datetime'):
 
 def separate__and_flip_modes(merged_df):
     '''
-    Separates the modes from the merged DataFrame and flips the eigenvectors.
+        Separates the modes from the merged DataFrame and flips the eigenvectors.
 
-    Parameters:
-    -----------
-        merged_df: pd.DataFrame
-            DataFrame containing the merged data
+        Parameters:
+        -----------
+            merged_df: pd.DataFrame
+                DataFrame containing the merged data
 
-    Returns:
-    -----------
-        modeshapes_dict: dictionary
-            Dictionary with mode ids as keys and DataFrames as values
+        Returns:
+        -----------
+            modeshapes_dict: dictionary
+                Dictionary with mode ids as keys and DataFrames as values
     '''
 
     modeshapes_df = merged_df.copy()
@@ -216,17 +216,17 @@ def separate__and_flip_modes(merged_df):
 
 def merge_modes(modeshapes_dict):
     '''
-    Merges the modes from the modeshapes dictionary back into a single DataFrame.
+        Merges the modes from the modeshapes dictionary back into a single DataFrame.
 
-    Parameters
-    -----------
-        modeshapes_dict: dictionary
-            Dictionary with mode ids as keys and DataFrames as values
+        Parameters
+        -----------
+            modeshapes_dict: dictionary
+                Dictionary with mode ids as keys and DataFrames as values
 
-    Returns
-    -------
-        modeshapes_df: pd.DataFrame
-            mMrged DataFrame containing all modes
+        Returns
+        -------
+            modeshapes_df: pd.DataFrame
+                mMrged DataFrame containing all modes
     '''
 
     for i in modeshapes_dict.keys():
@@ -240,21 +240,21 @@ def merge_modes(modeshapes_dict):
 
 def select_modes(df, modes, X_cols):
     '''
-    Selects specified modes from the DataFrame and pivots the data so that each mode's data is in separate columns.
+        Selects specified modes from the DataFrame and pivots the data so that each mode's data is in separate columns.
 
-    Parameters
-    -----------
-        df: pd.DataFrame
-            DataFrame containing the merged data
-        modes: list
-            List of mode ids to select
-        X_cols: list
-            List of weather columns to be used
+        Parameters
+        -----------
+            df: pd.DataFrame
+                DataFrame containing the merged data
+            modes: list
+                List of mode ids to select
+            X_cols: list
+                List of weather columns to be used
 
-    Returns:
-    -----------
-        final_df: pd.DataFrame
-            Dataframe with selected modes and pivoted structure
+        Returns:
+        -----------
+            final_df: pd.DataFrame
+                Dataframe with selected modes and pivoted structure
     '''
 
     # Pivot the DataFrame
@@ -282,29 +282,29 @@ def select_modes(df, modes, X_cols):
 
 def select_cols(data, modes, X_cols, y_cols):
     '''
-    Selects input features and output targets from the DataFrame based on specified modes and columns.
+        Selects input features and output targets from the DataFrame based on specified modes and columns.
 
-    Parameters:
-    -----------
-        data: pd.DataFrame
-            Dataframe containing the merged data
-        modes: list
-            List of mode ids
-        X_cols: list
-            List of weather columns to be used
-        y_cols
-            Can be 'frequency', 'modeshapes', 'frequency+modeshapes', or a list of column names
+        Parameters:
+        -----------
+            data: pd.DataFrame
+                Dataframe containing the merged data
+            modes: list
+                List of mode ids
+            X_cols: list
+                List of weather columns to be used
+            y_cols
+                Can be 'frequency', 'modeshapes', 'frequency+modeshapes', or a list of column names
 
-    Returns:
-    --------
-        X: pd.DataFrame
-            DataFrame of input features
-        y: pd.DataFrame
-            DataFrame of output targets
-        Q: VariableSet
-            VariableSet of input variables
-        y_names: list
-            List of output target names
+        Returns:
+        --------
+            X: pd.DataFrame
+                DataFrame of input features
+            y: pd.DataFrame
+                DataFrame of output targets
+            Q: VariableSet
+                VariableSet of input variables
+            y_names: list
+                List of output target names
     '''
 
     modes = sorted(modes)
@@ -346,26 +346,26 @@ def plot_correlation(input_df: pd.DataFrame,
                      annot: bool = True,
                      mode: str = 'input-output') -> plt.Figure:
     '''
-    Plots a correlation heatmap between input and output features.
+        Plots a correlation heatmap between input and output features.
 
-    Parameters:
-    -----------
-        input_df: pd.DataFrame
-            Input features DataFrame
-        output_df: pd.DataFrame
-            Output targets DataFrame
-        input_features: list, optional
-            List of input feature names to include
-        output_features: list, optional
-            List of output feature names to include
-        annot: bool
-            Whether to annotate the heatmap with correlation values
-        mode: str
-            'input-output', 'input-input', or 'output-output'
+        Parameters:
+        -----------
+            input_df: pd.DataFrame
+                Input features DataFrame
+            output_df: pd.DataFrame
+                Output targets DataFrame
+            input_features: list, optional
+                List of input feature names to include
+            output_features: list, optional
+                List of output feature names to include
+            annot: bool
+                Whether to annotate the heatmap with correlation values
+            mode: str
+                'input-output', 'input-input', or 'output-output'
 
-    Returns:
-    -------
-        matplotlib Figure
+        Returns:
+        -------
+            matplotlib Figure
     '''
 
     base_cell_size = 0.8
@@ -425,26 +425,26 @@ def scatter_plot(input_df: pd.DataFrame,
                  hue_col: str = None,
                  title: str = None) -> plt.Figure:
     '''
-    Creates a scatter plot using two features from input or output dataframes.
+        Creates a scatter plot using two features from input or output dataframes.
 
-    Parameters:
-    -----------
-        input_df : pd.DataFrame
-            DataFrame containing input features
-        output_df: pd.DataFrame
-            DataFrame containing output features
-        x_col: str
-            Name of feature to use for x-axis
-        y_col: str
-            Name of feature to use for y-axis
-        hue_col: str, optional
-            Name of feature to color by
-        title : str, optional
-            Title for the plot
+        Parameters:
+        -----------
+            input_df : pd.DataFrame
+                DataFrame containing input features
+            output_df: pd.DataFrame
+                DataFrame containing output features
+            x_col: str
+                Name of feature to use for x-axis
+            y_col: str
+                Name of feature to use for y-axis
+            hue_col: str, optional
+                Name of feature to color by
+            title : str, optional
+                Title for the plot
 
-    Returns:
-    -------
-        matplotlib Figure
+        Returns:
+        -------
+            matplotlib Figure
     '''
 
     # Merge input and output DataFrames for flexibility
@@ -478,17 +478,17 @@ def scatter_plot(input_df: pd.DataFrame,
 
 def remove_constant_columns(df: pd.DataFrame) -> (pd.DataFrame):
     '''
-    Removes columns with constant values from the DataFrame.
+        Removes columns with constant values from the DataFrame.
 
-    Parameters
-    ----------
-        df: pd.DataFrame
-            Input DataFrame
+        Parameters
+        ----------
+            df: pd.DataFrame
+                Input DataFrame
 
-    Returns
-    -----------
-        df: pd.DataFrame
-            DataFrame with constant columns removed
+        Returns
+        -----------
+            df: pd.DataFrame
+                DataFrame with constant columns removed
     '''
 
     constant_cols = [col for col in df.columns if df[col].dropna().nunique() == 1]
@@ -499,16 +499,16 @@ def remove_constant_columns(df: pd.DataFrame) -> (pd.DataFrame):
 
 def effects_to_json(effects):
     """
-    Converts a DataFrame of effects into a JSON-like structure.
+        Converts a DataFrame of effects into a JSON-like structure.
 
-    Parameters:
-    -----------
-        effects: pd.DataFrame
-            DataFrame containing the effects data
-    Returns:
-    --------
-        output: list
-            List of dictionaries representing the effects in a JSON-like format
+        Parameters:
+        -----------
+            effects: pd.DataFrame
+                DataFrame containing the effects data
+        Returns:
+        --------
+            output: list
+                List of dictionaries representing the effects in a JSON-like format
     """
 
     modes = sorted(
@@ -568,50 +568,50 @@ def json2unv(json, file_name, sensor_coords=None,
                     id1='NONE', id2='NONE', id3='NONE', id4='NONE', id5='NONE', model_type=1, analysis_type=2, data_ch=2, 
                     spec_data_type=8, data_type=2, n_data_per_node=3, load_case=1, modal_m=0, modal_damp_vis=0., modal_damp_his=0.):
     """
-    Converts JSON data to UNV format.
+        Converts JSON data to UNV format.
 
-    Parameters:
-    -----------
-        json: list
-            List of dictionaries containing the OMA data
-        file_name: str
-            Name of the output UNV file
-        sensor_coords: dict, optional
-            Dictionary mapping sensor IDs to coordinates
-        units_code: int
-            Code for the units
-        units_description: str
-            Description of the units
-        temp_mode: int
-            Temperature mode
-        length: float
-            Length value
-        force: float
-            Force value
-        temp: float
-            Temperature value
-        temp_offset: float
-            Temperature offset value
-        def_cs: list, optional
-            List of default coordinate systems
-        disp_cs: list, optional
-            List of displacement coordinate systems
-        color: list, optional
-            List of colors
-        id1, id2, id3, id4, id5: str, optional
-            IDs for the UNV file
-        model_type: int
-            Type of the model
-        analysis_type: int
-            Type of the analysis
-        data_ch: int
-            Data channel number
-        spec_data_type: int
-            Specific data type
+        Parameters:
+        -----------
+            json: list
+                List of dictionaries containing the OMA data
+            file_name: str
+                Name of the output UNV file
+            sensor_coords: dict, optional
+                Dictionary mapping sensor IDs to coordinates
+            units_code: int
+                Code for the units
+            units_description: str
+                Description of the units
+            temp_mode: int
+                Temperature mode
+            length: float
+                Length value
+            force: float
+                Force value
+            temp: float
+                Temperature value
+            temp_offset: float
+                Temperature offset value
+            def_cs: list, optional
+                List of default coordinate systems
+            disp_cs: list, optional
+                List of displacement coordinate systems
+            color: list, optional
+                List of colors
+            id1, id2, id3, id4, id5: str, optional
+                IDs for the UNV file
+            model_type: int
+                Type of the model
+            analysis_type: int
+                Type of the analysis
+            data_ch: int
+                Data channel number
+            spec_data_type: int
+                Specific data type
 
-    Returns:
-    --------
-        None
+        Returns:
+        --------
+            None
 
     """
 

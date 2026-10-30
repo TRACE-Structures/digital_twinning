@@ -103,4 +103,3 @@ This project is licensed under the GNU General Public License v3.0 only. See the
 ## Support
 
 For bug reports and questions, use the [project issue tracker](https://github.com/TRACE-Structures/digital_twinning/issues).
-```

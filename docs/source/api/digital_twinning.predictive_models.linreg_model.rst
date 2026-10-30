@@ -1,7 +1,12 @@
-Linear Regression
+Linear regression
 =================
 
-.. automodule:: digital_twinning.predictive_models.LinReg
+``LinReg`` is the linear-regression baseline implementation of the
+``PredictiveModel`` interface.
+
+.. currentmodule:: digital_twinning.predictive_models.LinReg
+
+.. autoclass:: LinReg
    :members:
    :show-inheritance:
-   :undoc-members:
+   :special-members: __init__

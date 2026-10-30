@@ -1,7 +1,12 @@
 Generalized Polynomial Chaos Expansion
 ======================================
 
-.. automodule:: digital_twinning.predictive_models.gPCE
+``gPCE`` adapts a generalized Polynomial Chaos Expansion model to the
+``PredictiveModel`` interface.
+
+.. currentmodule:: digital_twinning.predictive_models.gPCE
+
+.. autoclass:: gPCE
    :members:
    :show-inheritance:
-   :undoc-members:
+   :special-members: __init__

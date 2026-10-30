@@ -6,6 +6,24 @@ from matplotlib.cm import ScalarMappable
 from plotly.subplots import make_subplots
 
 def scatter_plot_modes_subplots(modeshapes_dict, x_key, y_key, modes=[0, 1, 2, 3, 6]):
+    """ Creates scatter plot subplots for selected modes.
+
+        Parameters
+        ----------
+        modeshapes_dict: dict
+            Dictionary containing mode shapes data for each mode
+        x_key: str
+            Column name for x-axis values
+        y_key: str
+            Column name for y-axis values
+        modes: list, optional
+            List of mode numbers to plot (default: [0, 1, 2, 3, 6])
+
+        Returns
+        -------
+        fig: plotly.graph_objects.Figure
+            Figure object containing the subplots
+    """
     rows = 1
     cols = len(modes)
 
@@ -45,6 +63,21 @@ def scatter_plot_modes_subplots(modeshapes_dict, x_key, y_key, modes=[0, 1, 2, 3
     return fig
 
 def plot_parts(modeshapes_dict, mode):
+    """
+        Plots the real and imaginary parts of the mode shapes for all sensors for a given mode.
+
+        Parameters
+        ----------
+        modeshapes_dict: dict
+            Dictionary containing mode shapes data for each mode
+        mode: int
+            Mode number to plot
+
+        Returns
+        -------
+        tuple
+            Tuple containing the figures for the real and imaginary parts
+    """
     df = modeshapes_dict[mode]
     parts = [('real', 'orange', 'Real'), ('imag', 'royalblue', 'Imaginary')]
     figures = []
@@ -75,6 +108,27 @@ def plot_parts(modeshapes_dict, mode):
     return figures[0], figures[1]
 
 def plot_sensor_complex_colored(modeshapes_dict, mode, sensor, color_by='Temperature', lines=False):
+    """
+        Plots the real and imaginary parts of the mode shapes for a specific sensor, colored by a specified variable.
+
+        Parameters
+        ----------
+        modeshapes_dict: dict
+            Dictionary containing mode shapes data for each mode
+        mode: int
+            Mode number to plot
+        sensor: int
+            Sensor number to plot
+        color_by: str, optional
+            Column name to color the points by (default: 'Temperature')
+        lines: bool, optional
+            Whether to connect the points with lines (default: False)
+
+        Returns
+        -------
+        fig: matplotlib.figure.Figure
+            Figure object containing the plot
+    """
     df = modeshapes_dict[mode]
     t = df['Datetime']
     color_data = df[color_by]
@@ -106,6 +160,23 @@ def plot_sensor_complex_colored(modeshapes_dict, mode, sensor, color_by='Tempera
     return fig
 
 def plot_complex_plane_all_sensors(modeshapes_dict, mode, color_by='Temperature'):
+    """
+        Plots the mode shapes for all sensors in the complex plane for a given mode, colored by a specified variable.
+
+        Parameters
+        ----------
+        modeshapes_dict: dict
+            Dictionary containing mode shapes data for each mode
+        mode: int
+            Mode number to plot
+        color_by: str, optional
+            Column name to color the points by (default: 'Temperature')
+
+        Returns
+        -------
+        fig: matplotlib.figure.Figure
+            Figure object containing the subplots
+    """
     df = modeshapes_dict[mode]
     num_sensors = 6
 
@@ -141,6 +212,23 @@ def plot_complex_plane_all_sensors(modeshapes_dict, mode, color_by='Temperature'
     return fig
 
 def plot_mode_shapes_3d(modeshapes_dict, mode, color_by='Temperature'):
+    """
+        Plots the 3D mode shapes for all sensors for a given mode, colored by a specified variable.
+
+        Parameters
+        ----------
+        modeshapes_dict: dict
+            Dictionary containing mode shapes data for each mode
+        mode: int
+            Mode number to plot
+        color_by: str, optional
+            Column name to color the points by (default: 'Temperature')
+
+        Returns
+        -------
+        fig: plotly.graph_objects.Figure
+            Figure object containing the 3D mode shape plot
+    """
     df = modeshapes_dict[mode]
     fig = go.Figure()
     num_sensors = 6

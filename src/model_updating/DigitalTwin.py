@@ -447,6 +447,6 @@ class DigitalTwin:
             -------
             fig : matplotlib.figure.Figure
                 Figure object containing the MCMC plot """
-                
+        
         fig = MCMC_plot(self, X_train, extra_point=extra_point, extra_point_name=extra_point_name, map=map, custom_xlim=custom_xlim, custom_ylim=custom_ylim)
         return fig
