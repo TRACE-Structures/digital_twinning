@@ -106,14 +106,14 @@ Install the published package with pip:
 The package metadata lists dependencies including PyTorch, scikit-learn,
 XGBoost, ``emcee``, ``SALib``, ``shap``, ``gPCE-model``, ``mosaictools``, and
 ``uncertain-variables``. The project is distributed as ``digital_twinning``
-version ``2.0.0``.
+version ``2.0.1``.
 
 Source layout
 -------------
 
 .. code-block:: text
 
-   src/
+   digital_twinning/
    ├── model_updating/       # DigitalTwin and JointManager
    ├── predictive_models/    # DNN, GBT, LinReg, gPCE, MOSAIC
    ├── probabilistic_models/ # MDN and CRPS
