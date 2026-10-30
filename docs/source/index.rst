@@ -164,7 +164,7 @@ For bug reports and questions, use the
 
 
 .. toctree::
-   :caption: digital_twinning
+   :caption: Digital Twinning
    :hidden:
    :maxdepth: 2
 
