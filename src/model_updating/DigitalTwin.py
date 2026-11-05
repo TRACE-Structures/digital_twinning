@@ -7,6 +7,9 @@ import numpy as np
 import uncertain_variables as uv
 from .plotting_functions import MCMC_plot
 from scipy.optimize import minimize
+from .PODLowRank import ReducedGaussianLikelihood
+from .mcmc_animation import animate_MCMC_walk
+
 
 
 class DigitalTwin:
@@ -37,6 +40,13 @@ class DigitalTwin:
         self.model = model
         self.E = E
         self.Q = self.get_Q_germ()
+        self._map_cache = None
+
+        # Low-rank (POD) update, Section 3.2 / Eq. (26) of Stanic et al. (2026)
+        self.pod = None
+        self.lik_r = None
+        self.model_predicts_reduced = False
+
 
     def get_Q_germ(self):
         """ Generate the germ of the variable set Q based on the model's Q 
@@ -75,7 +85,8 @@ class DigitalTwin:
             logprob = self.loglikelihood(q, self.y_m) + self.Q_.logpdf(q)
             return logprob 
         
-    def update(self, y_m, nwalkers=150, nburn=100, niter=350, Q_='default', plot_samples=False, name_pairs=None, progress=True):
+    def update(self, y_m, nwalkers=150, nburn=100, niter=350, Q_='default', plot_samples=False, name_pairs=None, progress=True,
+               pod=None, C_E=None, model_predicts_reduced=False, n_err_samples=20000):
         """ Update the digital twin using MCMC with given measurements y_m
 
             Parameters
@@ -101,9 +112,33 @@ class DigitalTwin:
             name_pairs : _type_, optional
                 List of tuples defining mapping between model outputs and measurements, by default None
             progress : bool, optional
-                If True, show progress bar during MCMC sampling, by default True"""
-        
+                If True, show progress bar during MCMC sampling, by default True
+
+            pod : PODLowRank or BlockPOD, optional
+                Fitted low-rank representation of the measurable output (fitted on the
+                training outputs, columns in the same order as y_m). If given, the
+                likelihood is evaluated in the reduced space (Eq. 26):
+                z_mr = P(z_m - mu_Y), C_Er = P C_E P^T. By default None (full space).
+
+            C_E : float, array_like (m,) or (m, m), optional
+                Full-space error covariance (scalar variance, vector of variances or
+                full matrix). Only used with pod. If None, the variances are estimated
+                by sampling self.E (assumed independent, zero-mean Gaussian).
+
+            model_predicts_reduced : bool, optional
+                True if self.model.predict already returns reduced coordinates Y_r
+                (surrogate trained on pod.transform(Y_train), as in the paper).
+                False if it returns full-space outputs, which are then projected.
+
+            n_err_samples : int, optional
+                Number of samples of E used to estimate C_E when C_E is None."""
+        self._map_cache = None
         self.Q_ = Q_
+        if pod is not None and name_pairs is not None:
+            raise NotImplementedError(
+                "name_pairs and pod cannot be combined: the POD basis must be fitted on "
+                "exactly the measured outputs. Select the columns before fitting the POD.")
+
         if name_pairs is not None:
             H = self.model.create_mx_from_tuple(name_pairs, list(y_m.keys()))
             self.q_indices, y_indices = self.get_indices_from_mx(H)
@@ -114,12 +149,32 @@ class DigitalTwin:
             y_m = y_m.to_numpy()
         self.y_m = y_m
         num_param = self.Q.num_variables()
+
+        self.pod = pod
+        self.model_predicts_reduced = model_predicts_reduced
+        if pod is not None:
+            z_m = np.asarray(y_m, dtype=float).ravel()
+            if z_m.shape[0] != pod.mu_.shape[0]:
+                raise ValueError(f"y_m has {z_m.shape[0]} values but the POD was fitted on "
+                                 f"{pod.mu_.shape[0]} outputs")
+            if C_E is None:
+                C_E = self.estimate_error_variances(n_err_samples)
+            self.lik_r = ReducedGaussianLikelihood(pod, z_m, C_E)
+            print(f'Low-rank update: {z_m.shape[0]} measurements -> {pod.m_r_} reduced coordinates')
+        else:
+            self.lik_r = None
         
         if Q_ == 'default':
             p0 = self.Q.sample(nwalkers)
         else:
             p0 = Q_.sample(nwalkers)
         self.p0 = p0
+
+        if self.lik_r is not None:
+            y_r0 = self.predict_reduced(np.asarray(p0)[0].reshape(1, -1))
+            if y_r0.shape[0] != pod.m_r_:
+                raise ValueError(f"Model output gives {y_r0.shape[0]} reduced coordinates, POD has "
+                                 f"{pod.m_r_}. Check model_predicts_reduced.")
 
         
         print('MCMC creating')
@@ -128,7 +183,10 @@ class DigitalTwin:
 
         print('Burning period')
         state = sampler.run_mcmc(p0, nburn, progress = progress)
+        self.burn_chain = sampler.get_chain().copy()     # stored for the walk animation
         sampler.reset()
+        # state = sampler.run_mcmc(p0, nburn, progress = progress)
+        # sampler.reset()
 
         print('MCMC running')
         sampler.run_mcmc(state, niter, progress = progress)
@@ -181,6 +239,15 @@ class DigitalTwin:
                 Log-likelihood of the measurements y_m given parameters q"""
         
         q = q.reshape(1, -1)
+
+        if self.lik_r is not None:
+            # Reduced-space likelihood, Eq. (26): N(z_mr - y_r(q); 0, P C_E P^T)
+            y_r = self.predict_reduced(q)
+            if y_r is None:
+                return -np.inf
+            logp = self.lik_r.log_likelihood(y_r)
+            return float(logp) if np.isfinite(logp) else -np.inf
+
         q_df = pd.DataFrame(q, columns=self.Q.variable_names())
         if self.q_indices is None:
             q_model = self.model.Q.germ2variable(q)
@@ -202,6 +269,43 @@ class DigitalTwin:
         if not np.all(np.isfinite(logp)):
             return -np.inf
         return float(logp)
+
+    def predict_reduced(self, q):
+        """ Reduced model output y_r(q) = P(M(S(q)) - mu_Y) for one germ-space point q
+
+            Parameters
+            ----------
+            q : array_like, shape (1, n_params)
+                Parameter values in germ space
+
+            Returns
+            -------
+            y_r : numpy.ndarray, shape (m_r,), or None if the prediction is not finite """
+        
+        q_model = self.model.Q.germ2variable(q)
+        if np.any(~np.isfinite(q_model)):
+            return None
+        q_df = pd.DataFrame(q_model, columns=self.model.Q.variable_names())
+        pred = np.asarray(self.model.predict(q_df), dtype=float).reshape(1, -1)
+        if np.any(~np.isfinite(pred)):
+            return None
+        if not self.model_predicts_reduced:
+            pred = self.pod.transform(pred)
+        return pred.ravel()
+
+    def estimate_error_variances(self, n_samples=20000):
+        """ Estimate the full-space error variances (diagonal of C_E) by sampling E
+
+            Assumes independent components, as in Eqs. (30)-(32). Pass C_E to update()
+            directly if the exact variances are known.
+
+            Returns
+            -------
+            var : numpy.ndarray, shape (m,) """
+        
+        samples = np.asarray(self.E.sample(n_samples), dtype=float)
+        return samples.var(axis=0, ddof=1)
+
     
     def prior(self, q):
         """ Compute the prior probability of the parameters q
@@ -339,6 +443,11 @@ class DigitalTwin:
         if space not in ('germ', 'physical'):
             raise ValueError("space must be 'germ' or 'physical'")
 
+        key = (scaled, refine, n_starts, space)
+        if getattr(self, '_map_cache', None) is not None and self._map_cache[0] == key:
+            map_df, best_lp = self._map_cache[1]
+            return (map_df.copy(), best_lp) if return_logprob else map_df.copy()
+
         chain = self.sampler.get_chain(flat=True)
         logp = self.sampler.get_log_prob(flat=True)
 
@@ -379,6 +488,7 @@ class DigitalTwin:
             map_estimate = self.model.Q.germ2variable(map_estimate)
 
         map_df = pd.DataFrame(map_estimate, columns=self.Q.variable_names())
+        self._map_cache = (key, (map_df, best_lp))
         return (map_df, best_lp) if return_logprob else map_df
 
     def _log_abs_det_jacobian(self, theta, h=1e-6):
@@ -425,7 +535,12 @@ class DigitalTwin:
         return q_indices, y_indices
 
 
-    def plot_MCMC(self, X_train, extra_point=None, extra_point_name='Extra point', map=True, custom_xlim=None, custom_ylim=None):
+    # def plot_MCMC(self, X_train, extra_point=None, extra_point_name='Extra point', map=True, custom_xlim=None, custom_ylim=None):
+        
+    #     fig = MCMC_plot(self, X_train, extra_point=extra_point, extra_point_name=extra_point_name, map=map, custom_xlim=custom_xlim, custom_ylim=custom_ylim)
+    #     return fig
+
+    def plot_MCMC(self, X_train, extra_point=None, extra_point_name='Extra point', map=True, custom_xlim=None, custom_ylim=None, **plot_kwargs):
         """ Plot the MCMC results for the given training data and optional extra point
 
             Parameters
@@ -447,6 +562,10 @@ class DigitalTwin:
             -------
             fig : matplotlib.figure.Figure
                 Figure object containing the MCMC plot """
-        
-        fig = MCMC_plot(self, X_train, extra_point=extra_point, extra_point_name=extra_point_name, map=map, custom_xlim=custom_xlim, custom_ylim=custom_ylim)
+
+        fig = MCMC_plot(self, X_train, extra_point=extra_point, extra_point_name=extra_point_name, map=map, custom_xlim=custom_xlim, custom_ylim=custom_ylim, **plot_kwargs)
         return fig
+
+    def animate_MCMC(self, X_train, filename=None, **anim_kwargs):
+        """ Animate the MCMC random walk (see mcmc_animation.animate_MCMC_walk) """
+        return animate_MCMC_walk(self, X_train, filename=filename, **anim_kwargs)

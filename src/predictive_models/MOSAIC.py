@@ -325,6 +325,27 @@ class MOSAIC(PredictiveModel):
         vl_loss = mean_squared_error(y_val.values, y_pred_vl)
         return tr_loss, vl_loss
 
+    def modal_validation(self, X_test: pd.DataFrame, y_test: pd.DataFrame):
+        """ Performs modal validation using the test data.
+
+            Parameters
+            ----------
+            X_test : pd.DataFrame
+                Input feature data for testing.
+            y_test : pd.DataFrame
+                Target data for testing.
+
+            Returns
+            -------
+            freq_errors : array-like
+                Frequency errors.
+            mac_errors : array-like
+                MAC errors.
+        """
+        test_freq, test_eig = self.extract_arrays(y_test)
+        freq_errors, mac_errors = self.model.validate(X_test.values, test_freq, test_eig)
+        return freq_errors, mac_errors
+
     def numpy_train(self, X_train, train_freq, train_eig):
         """ Trains the model using the provided training data in structured NumPy arrays.
 
@@ -343,43 +364,40 @@ class MOSAIC(PredictiveModel):
         """
         self.model.fit(X_train, train_freq, train_eig)
 
-
     def predict(self, X):
-        '''
-        Makes predictions using the trained Linear Regression model.
+        ''' Makes predictions using the trained Linear Regression model.
 
-        Parameters
-        ----------
-        X : array-like
-            Input feature data for prediction.
+            Parameters
+            ----------
+            X : array-like
+                Input feature data for prediction.
 
-        Returns
-        -------
-        predictions : array-like
-            Predicted target values.
+            Returns
+            -------
+            predictions : array-like
+                Predicted target values.
         '''
         return self.model.predict(X)        
 
     def compute_shap_values(self, predict_fn, q, forced=False, explainer_type="kernelexplainer", silent=False):
-        '''
-        Computes SHAP values for model interpretability.
+        ''' Computes SHAP values for model interpretability.
         
-        Parameters
-        ----------
-        predict_fn : function
-            The prediction function of the model.
-        q : array-like
-            Input data for SHAP value computation.
-        forced : bool, optional
-            If True, forces re-computation of the SHAP explainer. Default is False.
-        explainer_type : str, optional
-            Type of SHAP explainer to use. Default is "kernelexplainer".
-        silent : bool, optional
-            If True, suppresses output during SHAP value computation. Default is False.
-        Returns
-        -------
-        shap_values : array-like
-            Computed SHAP values.
+            Parameters
+            ----------
+            predict_fn : function
+                The prediction function of the model.
+            q : array-like
+                Input data for SHAP value computation.
+            forced : bool, optional
+                If True, forces re-computation of the SHAP explainer. Default is False.
+            explainer_type : str, optional
+                Type of SHAP explainer to use. Default is "kernelexplainer".
+            silent : bool, optional
+                If True, suppresses output during SHAP value computation. Default is False.
+            Returns
+            -------
+            shap_values : array-like
+                Computed SHAP values.
         '''
 
         if explainer_type == "kernelexplainer":

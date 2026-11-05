@@ -66,7 +66,7 @@ Install the published package with pip:
 pip install digital-twinning
 ```
 
-The package metadata lists dependencies including PyTorch, scikit-learn, XGBoost, `emcee`, `SALib`, `shap`, `gPCE-model`, `mosaictools`, and `uncertain-variables`. The project is distributed as `digital_twinning` version `2.0.1`.
+The package metadata lists dependencies including PyTorch, scikit-learn, XGBoost, `emcee`, `SALib`, `shap`, `gPCE-model`, `mosaictools`, and `uncertain-variables`. The project is distributed as `digital_twinning` version `2.0.2`.
 
 ## Source layout
 

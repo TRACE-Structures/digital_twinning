@@ -467,3 +467,24 @@ def plot_sobol_sensitivity(sobol_index, y, param_name=None):
     ax.grid(True, alpha=0.3)
 
     return fig
+
+
+def plot_modal_validation_errors(freq_errors, mac_errors):
+    fig, axes = plt.subplots(1, 2)
+
+    flierprops = dict(marker='.', markerfacecolor='none', markersize=1,
+                    linestyle='none', markeredgecolor='C0')
+    medianprops=dict(color ="C0", linewidth= 1.5)
+    axes[0].boxplot(freq_errors, showfliers = True, whis = (5, 95), flierprops=flierprops, medianprops=medianprops)
+    axes[0].set_xlabel('Modes')
+    axes[0].set_ylabel('Relative Frequency Error')
+    axes[0].set_yscale('log')
+
+    axes[1].boxplot(mac_errors, showfliers = True,  whis = (5, 95), flierprops=flierprops, medianprops=medianprops)
+    axes[1].set_xlabel('Modes')
+    axes[1].set_ylabel('MAC Error')
+    axes[1].set_yscale('log')
+    fig.suptitle('Cross-validation errors')
+
+    fig.tight_layout()
+    return fig
