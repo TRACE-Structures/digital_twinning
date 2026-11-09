@@ -256,3 +256,21 @@ def extract_arrays(df, m=None, n=None, directions=None):
         eigenvectors[:, mode_idx, :] = df[cols].to_numpy(dtype=np.float64)
 
     return frequencies, eigenvectors
+
+def get_modes_and_nodes(df):
+    """ Infer the number of frequency modes and nodes from a DataFrame.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            DataFrame containing the frequency and eigenvector data.
+
+        Returns
+        -------
+        m : int
+            Number of frequency modes.
+        n : int
+            Number of nodes. """
+    
+    m, n, d = _infer_dims(df.columns)
+    return m, n*d
