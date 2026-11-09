@@ -273,4 +273,4 @@ def get_modes_and_nodes(df):
             Number of nodes. """
     
     m, n, d = _infer_dims(df.columns)
-    return m, n*d
+    return m, n*len(d)
