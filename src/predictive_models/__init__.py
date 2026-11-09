@@ -5,3 +5,4 @@ from .gPCE import *
 from .MOSAIC import *
 from .DNN import *
 from .PredictiveModel import *
+from .utils import *
