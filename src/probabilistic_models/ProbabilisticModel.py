@@ -7,8 +7,12 @@ import numpy as np
 from .plotting_functions import posterior_plot
 import os
 import pickle
+from sklearn.metrics import mean_squared_error
+from scipy.stats import kendalltau, pearsonr, spearmanr
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 
+POINT_ESTIMATES = ('mean', 'median', 'branch')
 
 class ProbabilisticModel(ABC):
     """ Abstract base class for probabilistic models.
@@ -297,6 +301,172 @@ class ProbabilisticModel(ABC):
         """
         fig = posterior_plot(self, X_train, samples, extra_point=extra_point, extra_point_name=extra_point_name, map_point=map_point)
         return fig
+
+    def _evaluate_model(self, y_train, X_test, y_test, verbose=False):
+        '''
+        Evaluates the predictive model using various metrics.
+
+        Parameters:
+        -----------
+        y_train : pd.DataFrame
+            Training target values
+        X_test : pd.DataFrame
+            Testing input features
+        y_test : pd.DataFrame
+            Testing target values
+        verbose : bool
+            If True, prints the evaluation metrics (default is False)
+
+        Returns:
+        -------
+        list:
+            List containing a DataFrame of evaluation metrics and a dictionary of model evaluation results.
+        '''
+
+        pred = self.predict(X_test)
+
+        # Ensure y_test is a DataFrame for consistent column-wise iteration
+        if isinstance(y_test, pd.Series):
+            y_test_df = y_test.to_frame()
+        elif isinstance(y_test, np.ndarray) and y_test.ndim == 1:
+            y_test_df = pd.DataFrame(y_test)
+        else: # Already a DataFrame or multi-dim array
+            y_test_df = y_test if isinstance(y_test, pd.DataFrame) else pd.DataFrame(y_test)
+
+        # Ensure y_train is a DataFrame for consistent column-wise iteration
+        if isinstance(y_train, pd.Series):
+            y_train_df = y_train.to_frame()
+        elif isinstance(y_train, np.ndarray) and y_train.ndim == 1:
+            y_train_df = pd.DataFrame(y_train)
+        else: # Already a DataFrame or multi-dim array
+            y_train_df = y_train if isinstance(y_train, pd.DataFrame) else pd.DataFrame(y_train)
+
+        # Ensure prediction is a DataFrame for consistent column-wise iteration
+        if isinstance(pred, pd.Series):
+            pred_df = pred.to_frame()
+        elif isinstance(pred, np.ndarray) and pred.ndim == 1:
+            pred_df = pd.DataFrame(pred)
+        else: # Already a DataFrame or multi-dim array
+            pred_df = pred if isinstance(pred, pd.DataFrame) else pd.DataFrame(pred)
+
+        num_outputs = y_test_df.shape[1]
+        output_column_names = y_test_df.columns.tolist()
+        if num_outputs == 1:
+            output_column_names[0] = self.QoI_names[0]
+
+        # List to store dictionaries for each output's metrics (for DataFrame creation)
+        individual_metrics_list = []
+
+        for i, col_name in enumerate(output_column_names):
+            y_true_dim = y_test_df.iloc[:, i]
+            y_pred_dim = pred_df.iloc[:, i]
+            y_train_dim = y_train_df.iloc[:, i]
+
+            # Check for constant inputs before calculating correlations
+            is_y_true_constant = (y_true_dim.nunique() <= 1)
+            is_y_pred_constant = (y_pred_dim.nunique() <= 1)
+
+            if is_y_true_constant or is_y_pred_constant:
+                # If either input is constant, correlation is undefined
+                kendall_tau_val = np.nan
+                pearson_val = np.nan
+                spearman_val = np.nan
+            else:
+                try:
+                    kendall_tau_val = kendalltau(y_true_dim, y_pred_dim)[0]
+                except ValueError:
+                    kendall_tau_val = np.nan
+                try:
+                    pearson_val = pearsonr(y_true_dim, y_pred_dim)[0]
+                except ValueError:
+                    pearson_val = np.nan
+                try:
+                    spearman_val = spearmanr(y_true_dim, y_pred_dim)[0]
+                except ValueError:
+                    spearman_val = np.nan
+
+            mse_val = mean_squared_error(y_true_dim, y_pred_dim)
+            mae_val = mean_absolute_error(y_true_dim, y_pred_dim)
+            rmse_val = np.sqrt(mse_val)
+            norm_rmse = rmse_val / (max(y_train_dim) - min(y_train_dim))
+            norm_mae = mae_val / (max(y_train_dim) - min(y_train_dim))
+
+            # Get STD of label for the specific training output column
+            if isinstance(y_train, pd.Series):
+                std_of_label_val = y_train.std()
+            elif isinstance(y_train, np.ndarray) and y_train.ndim == 1:
+                std_of_label_val = pd.Series(y_train).std()
+            else: # It's a DataFrame or multi-dim array
+                y_train_df_temp = y_train if isinstance(y_train, pd.DataFrame) else pd.DataFrame(y_train)
+                std_of_label_val = y_train_df_temp.iloc[:, i].std()
+
+            current_output_metrics = {
+                "Kendall_tau": kendall_tau_val,
+                "Pearson": pearson_val,
+                "Spearman": spearman_val,
+                "MSE": mse_val,
+                "MAE": mae_val,
+                "RMSE": rmse_val,
+                "STD_of_label": std_of_label_val,
+                "NRMSE": norm_rmse,
+                "NMAE": norm_mae
+            }
+            # Add relative RMSE and summed metric for each output
+            # Check for zero STD_of_label before division
+            if std_of_label_val == 0 or np.isnan(std_of_label_val):
+                current_output_metrics["rel_RMSE"] = np.nan
+            else:
+                current_output_metrics["rel_RMSE"] = (
+                    current_output_metrics["RMSE"] /
+                    current_output_metrics["STD_of_label"]
+                )
+
+            # Ensure correlation metrics are not NaN for summed metric calculation
+            k_tau = 0 if np.isnan(kendall_tau_val) else kendall_tau_val
+            p_corr = 0 if np.isnan(pearson_val) else pearson_val
+            s_corr = 0 if np.isnan(spearman_val) else spearman_val
+            rel_rmse = current_output_metrics["rel_RMSE"] if not np.isnan(current_output_metrics["rel_RMSE"]) else 0
+
+            current_output_metrics["summed_metric"] = (
+                k_tau + p_corr + s_corr - rel_rmse
+            ) / 3
+
+            # Add the output name/label to this dictionary
+            current_output_metrics['Output_Name'] = col_name
+            individual_metrics_list.append(current_output_metrics)
+
+        # Create DataFrame for individual output metrics
+        df_individual_metrics = pd.DataFrame(individual_metrics_list)
+        df_individual_metrics = df_individual_metrics.set_index('Output_Name')
+
+        # --- Conditional Aggregated Metrics ---
+        model_eval_aggregated = {}
+        if num_outputs > 1: # Only calculate aggregated metrics if there are multiple outputs
+            for metric_name in ["Kendall_tau", "Pearson", "Spearman", "MSE", "MAE", "RMSE", "rel_RMSE", 'NRMSE', 'NMAE', "summed_metric"]:
+                values = df_individual_metrics[metric_name].dropna().tolist()
+                if values:
+                    model_eval_aggregated[f"Aggregated_{metric_name}_Mean"] = np.mean(values)
+                    model_eval_aggregated[f"Aggregated_{metric_name}_Min"] = np.min(values)
+                    model_eval_aggregated[f"Aggregated_{metric_name}_Max"] = np.max(values)
+                else:
+                    model_eval_aggregated[f"Aggregated_{metric_name}_Mean"] = np.nan
+                    model_eval_aggregated[f"Aggregated_{metric_name}_Min"] = np.nan
+                    model_eval_aggregated[f"Aggregated_{metric_name}_Max"] = np.nan
+
+        if verbose:
+            print("\n--- Individual Output Metrics (Table) ---")
+            print(df_individual_metrics.round(3))
+
+            if num_outputs > 1:
+                print("\n--- Aggregated Metrics ---")
+                for key, value in model_eval_aggregated.items():
+                    print(f'{key}: {value:.3f}')
+            else:
+                print("\n(Aggregated metrics not shown for single output.)")
+
+        return [df_individual_metrics, model_eval_aggregated]
+
+
 
     def __getstate__(self):
         '''
