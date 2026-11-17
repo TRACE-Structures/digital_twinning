@@ -1,4 +1,4 @@
-__version__ = "2.0.7"
+__version__ = "2.0.8"
 
 from .predictive_models import *
 from .probabilistic_models import *

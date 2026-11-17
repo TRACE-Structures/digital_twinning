@@ -1,11 +1,16 @@
 '''Preprocessing functions for mode shape data handling in digital twinning.'''
 
+from __future__ import annotations
+
 import pyuff
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from uncertain_variables import Variable, UniformDistribution, VariableSet
 import seaborn as sns
+import re
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 
 def compute_dot_products(input_eigenvectors : np.ndarray, reference_eigenvectors: np.ndarray) -> np.ndarray:
     '''
@@ -717,3 +722,160 @@ def json2unv(json, file_name, sensor_coords=None,
     uff = pyuff.UFF(file_name)
     uff.write_sets(unv_data)
     print(np.mean(imags), np.std(imags), imags)
+
+
+"""Helpers for QoI DataFrames with columns f.<mode> and S.<mode>.<node>.<x|y|z>
+(the format read_simulation_file returns and y_df.csv uses)."""
+
+
+_FREQ_COL = re.compile(r"^f\.(\d+)$")
+_SHAPE_COL = re.compile(r"^S\.(\d+)\.(\d+)\.([xyz])$")
+
+
+def _parse_columns(columns):
+    """Return {column: ("f", mode, None, None) | ("S", mode, node, axis)}."""
+    parsed, unknown = {}, []
+    for col in columns:
+        if m := _FREQ_COL.match(str(col)):
+            parsed[col] = ("f", int(m.group(1)), None, None)
+        elif m := _SHAPE_COL.match(str(col)):
+            parsed[col] = ("S", int(m.group(1)), int(m.group(2)), m.group(3))
+        else:
+            unknown.append(col)
+    if unknown:
+        raise ValueError(
+            "Columns not of the form f.<mode> or S.<mode>.<node>.<x|y|z>: "
+            f"{unknown[:5]}{' ...' if len(unknown) > 5 else ''}"
+        )
+    return parsed
+
+
+def _normalize_directions(directions) -> set[str]:
+    if isinstance(directions, str):
+        directions = [directions] if directions.lower() in ("x", "y", "z", "ux", "uy", "uz") \
+            else list(directions)
+    out = set()
+    for d in directions:
+        a = str(d).lower()
+        a = a[1:] if a.startswith("u") else a
+        if a not in ("x", "y", "z"):
+            raise ValueError(f"Unknown direction {d!r}; use x, y or z")
+        out.add(a)
+    return out
+
+
+def _as_int_set(values: Iterable, what: str) -> set[int]:
+    if isinstance(values, (int,)):
+        values = [values]
+    out = set()
+    for v in values:
+        if int(v) != v or int(v) < 1:
+            raise ValueError(f"{what} numbers must be positive integers (1-based), got {v!r}")
+        out.add(int(v))
+    return out
+
+
+@dataclass
+class QoIInfo:
+    """What a QoI DataFrame contains (see ``describe_QoI``)."""
+    modes: list[int]
+    has_frequencies: bool
+    has_mode_shapes: bool
+    nodes: list[int] = field(default_factory=list)       # empty without mode shapes
+    directions: list[str] = field(default_factory=list)  # empty without mode shapes
+
+
+def describe_QoI(qoi: pd.DataFrame) -> QoIInfo:
+    """Report which modes, nodes and directions a QoI DataFrame contains.
+
+    Returns a ``QoIInfo`` with
+        modes            sorted 1-based mode numbers found in any f or S column
+        has_frequencies  True if there is at least one f.<mode> column
+        has_mode_shapes  True if there is at least one S.<mode>.<node>.<axis> column
+        nodes            sorted 1-based node numbers (empty without mode shapes)
+        directions       e.g. ['x', 'y'], in x, y, z order (empty without mode shapes)
+
+    Fields can be read as attributes (``info.modes``) or turned into a dict
+    with ``dataclasses.asdict(info)``.
+
+    Example
+    -------
+    >>> info = describe_QoI(y_df)
+    >>> info.modes, info.directions
+    ([1, 2, 3, 4], ['x', 'y'])
+    """
+    parsed = _parse_columns(qoi.columns).values()
+    shape_cols = [p for p in parsed if p[0] == "S"]
+    has_shapes = bool(shape_cols)
+    return QoIInfo(
+        modes=sorted({p[1] for p in parsed}),
+        has_frequencies=any(p[0] == "f" for p in parsed),
+        has_mode_shapes=has_shapes,
+        nodes=sorted({p[2] for p in shape_cols}),
+        directions=[a for a in ("x", "y", "z") if any(p[3] == a for p in shape_cols)],
+    )
+
+
+def filtered_QoI(
+    qoi: pd.DataFrame,
+    modes: Iterable[int] | int | None = None,
+    directions: Iterable[str] | str | None = None,
+    nodes: Iterable[int] | int | None = None,
+    include_frequencies: bool = True,
+    include_mode_shapes: bool = True,
+) -> pd.DataFrame:
+    """Select part of a QoI DataFrame by mode, direction and node.
+
+    Parameters
+    ----------
+    qoi : DataFrame with columns f.<mode> and S.<mode>.<node>.<x|y|z>
+    modes : 1-based mode numbers to keep, e.g. [1, 3, 6]. None keeps all.
+    directions : mode-shape directions to keep, e.g. ['x'] or "xy" ("ux"
+        style also accepted). None keeps all. Frequencies have no direction,
+        so this only affects S columns.
+    nodes : 1-based node numbers (as in the headers) to keep. None keeps all.
+    include_frequencies : keep the f.<mode> columns of the selected modes
+    include_mode_shapes : keep the S columns of the selected modes
+
+    Returns
+    -------
+    DataFrame with the selected columns in their original order, same index.
+    Asking for a mode, direction or node that is not in ``qoi`` raises a
+    ValueError, so a typo can't silently give an empty selection.
+
+    Example
+    -------
+    >>> f_y_df = filtered_QoI(y_df, modes=[1, 3, 6], directions=['x'])
+    """
+    parsed = _parse_columns(qoi.columns)
+    present_modes = {p[1] for p in parsed.values()}
+    present_dirs = {p[3] for p in parsed.values() if p[0] == "S"}
+    present_nodes = {p[2] for p in parsed.values() if p[0] == "S"}
+
+    want_modes = present_modes if modes is None else _as_int_set(modes, "Mode")
+    want_dirs = present_dirs if directions is None else _normalize_directions(directions)
+    want_nodes = present_nodes if nodes is None else _as_int_set(nodes, "Node")
+
+    problems = []
+    if missing := sorted(want_modes - present_modes):
+        problems.append(f"modes {missing} not in the data (available: 1..{max(present_modes)})")
+    if include_mode_shapes:
+        if missing := sorted(want_dirs - present_dirs):
+            problems.append(f"directions {missing} not in the data (available: {sorted(present_dirs)})")
+        if missing := sorted(want_nodes - present_nodes):
+            problems.append(f"nodes {missing[:10]}{' ...' if len(missing) > 10 else ''} not in the "
+                            f"data (available: 1..{max(present_nodes)})")
+    if problems:
+        raise ValueError("; ".join(problems))
+
+    keep = []
+    for col, (kind, mode, node, axis) in parsed.items():
+        if mode not in want_modes:
+            continue
+        if kind == "f":
+            if include_frequencies:
+                keep.append(col)
+        elif include_mode_shapes and axis in want_dirs and node in want_nodes:
+            keep.append(col)
+
+    return qoi.loc[:, keep].copy()
