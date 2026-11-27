@@ -3,68 +3,68 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import shap
 
-def plot_remained_effects(higher_bound, lower_bound, margin, higher_measured_bound, lower_measured_bound, QoI_names, xticks=True):
-    ''' Plot remaining effect bounds with measured min-max and acceptable margins.
+# def plot_remained_effects(higher_bound, lower_bound, margin, higher_measured_bound, lower_measured_bound, QoI_names, xticks=True):
+#     ''' Plot remaining effect bounds with measured min-max and acceptable margins.
 
-        Parameters
-        ----------
-        higher_bound : array_like
-            Upper bounds of reference effect.
-        lower_bound : array_like
-            Lower bounds of reference effect.
-        margin : float
-            Margin threshold defining acceptable regions.
-        higher_measured_bound : array_like
-            Upper bounds of measured data.
-        lower_measured_bound : array_like
-            Lower bounds of measured data.
-        QoI_names : list of str
-            Names of quantities of interest.
-        xticks : bool, optional
-            Whether to display x-axis tick labels.
+#         Parameters
+#         ----------
+#         higher_bound : array_like
+#             Upper bounds of reference effect.
+#         lower_bound : array_like
+#             Lower bounds of reference effect.
+#         margin : float
+#             Margin threshold defining acceptable regions.
+#         higher_measured_bound : array_like
+#             Upper bounds of measured data.
+#         lower_measured_bound : array_like
+#             Lower bounds of measured data.
+#         QoI_names : list of str
+#             Names of quantities of interest.
+#         xticks : bool, optional
+#             Whether to display x-axis tick labels.
 
-        Returns
-        -------
-        matplotlib.figure.Figure
-            Figure showing effect bounds and monitoring data. '''
+#         Returns
+#         -------
+#         matplotlib.figure.Figure
+#             Figure showing effect bounds and monitoring data. '''
     
-    fig, ax = plt.subplots(figsize=(10, 5))
-    x = np.arange(0, len(higher_bound))
-    ax.fill_between(x, higher_bound + margin, lower_bound - margin, color = '#1a80bb', alpha=0.3, label='Acceptable region')
+#     fig, ax = plt.subplots(figsize=(10, 5))
+#     x = np.arange(0, len(higher_bound))
+#     ax.fill_between(x, higher_bound + margin, lower_bound - margin, color = '#1a80bb', alpha=0.3, label='Acceptable region')
 
-    ax.fill_between(x, higher_measured_bound, lower_measured_bound, color = 'gray', alpha=0.3)
+#     ax.fill_between(x, higher_measured_bound, lower_measured_bound, color = 'gray', alpha=0.3)
 
 
-    ax.plot(higher_bound, color='#1a80bb', label='Reference min-max')
-    ax.plot(lower_bound, color='#1a80bb')
+#     ax.plot(higher_bound, color='#1a80bb', label='Reference min-max')
+#     ax.plot(lower_bound, color='#1a80bb')
 
-    ax.plot(higher_measured_bound, color ='black', label='Monitoring min-max')
-    ax.plot(lower_measured_bound, color ='black')
+#     ax.plot(higher_measured_bound, color ='black', label='Monitoring min-max')
+#     ax.plot(lower_measured_bound, color ='black')
 
-    up_up_indexes = np.where(higher_measured_bound > higher_bound + margin)[0]
-    up_low_indexes = np.where(higher_measured_bound < lower_bound - margin)[0]
-    low_up_indexes = np.where(lower_measured_bound > higher_bound + margin)[0]
-    low_low_indexes = np.where(lower_measured_bound < lower_bound - margin)[0]
+#     up_up_indexes = np.where(higher_measured_bound > higher_bound + margin)[0]
+#     up_low_indexes = np.where(higher_measured_bound < lower_bound - margin)[0]
+#     low_up_indexes = np.where(lower_measured_bound > higher_bound + margin)[0]
+#     low_low_indexes = np.where(lower_measured_bound < lower_bound - margin)[0]
     
-    upper_indexes = np.sort(np.concatenate((up_up_indexes, up_low_indexes)))
-    lower_indexes = np.sort(np.concatenate((low_up_indexes, low_low_indexes)))
+#     upper_indexes = np.sort(np.concatenate((up_up_indexes, up_low_indexes)))
+#     lower_indexes = np.sort(np.concatenate((low_up_indexes, low_low_indexes)))
 
-    if (len(upper_indexes) > 0) and (len(lower_indexes) > 0):
-        ax.plot(upper_indexes, higher_measured_bound[upper_indexes], 'ro', label='Point outside acceptable region')
-        ax.plot(lower_indexes, lower_measured_bound[lower_indexes], 'ro')
+#     if (len(upper_indexes) > 0) and (len(lower_indexes) > 0):
+#         ax.plot(upper_indexes, higher_measured_bound[upper_indexes], 'ro', label='Point outside acceptable region')
+#         ax.plot(lower_indexes, lower_measured_bound[lower_indexes], 'ro')
 
-    elif len(upper_indexes) > 0:
-        ax.plot(upper_indexes, higher_measured_bound[upper_indexes], 'ro', label='Point outside acceptable region')
-    elif len(lower_indexes) > 0:
-        ax.plot(lower_indexes, lower_measured_bound[lower_indexes], 'ro', label='Point outside acceptable region')
+#     elif len(upper_indexes) > 0:
+#         ax.plot(upper_indexes, higher_measured_bound[upper_indexes], 'ro', label='Point outside acceptable region')
+#     elif len(lower_indexes) > 0:
+#         ax.plot(lower_indexes, lower_measured_bound[lower_indexes], 'ro', label='Point outside acceptable region')
 
-    if xticks:
-        ax.set_xticks(x, QoI_names)
-    else:
-        ax.set_xticklabels([])
-    ax.set_xlabel('Predicted features', fontsize=12)
-    fig.legend()
-    return fig
+#     if xticks:
+#         ax.set_xticks(x, QoI_names)
+#     else:
+#         ax.set_xticklabels([])
+#     ax.set_xlabel('Predicted features', fontsize=12)
+#     fig.legend()
+#     return fig
 
 def plot_shap_single_waterfall(model, silent, q, param_name):
     ''' SHAP waterfall plot for an individual prediction.

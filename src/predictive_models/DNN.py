@@ -2,13 +2,14 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 import pandas as pd
 import shap
 import datetime
 from .PredictiveModel import PredictiveModel
 from sklearn.preprocessing import MinMaxScaler
+import warnings
+from ..utils.gpu_utils import use_device
 
 class DNN(PredictiveModel):
 
@@ -54,12 +55,55 @@ class DNN(PredictiveModel):
         self.QoI_names = QoI_names
         self.layers = layers
         self.outputAF = outputAF
-        self.model = self.DNNInner(self.Q.num_variables(), len(self.QoI_names), self.layers, self.outputAF).double()
+        self.predict_device = 'cpu'
+        self.predict_gpu_memory_fraction = None
+        self.model = self._build_inner()
+
+    def _build_inner(self):
+        """ Create a freshly initialized inner network (float64, on the CPU). """
+        return self.DNNInner(self.Q.num_variables(), len(self.QoI_names), self.layers, self.outputAF).double()
 
 
-    def train(self, q_train, y_train, k_fold=None, train_test_ratio=0.8, random_seed=1997, split_type='no_shuffle',**params):
+    # Old option names of DNN.train, translated to the options shared with MDN / CRPS
+    _LEGACY_OPTIONS = {'epochs': 'max_epoch'}
+
+    @staticmethod
+    def _translate_legacy_options(params):
+        """ Map the old options 'epochs' and 'early_stopping' to the shared ones, with a warning. """
+        params = dict(params)
+        for old, new in DNN._LEGACY_OPTIONS.items():
+            if old in params:
+                warnings.warn(f"DNN option '{old}' is renamed to '{new}' (same name as in MDN / CRPS).", FutureWarning,
+                              stacklevel=3)
+                params.setdefault(new, params.pop(old))
+        if 'early_stopping' in params:
+            es = params.pop('early_stopping')
+            warnings.warn("DNN option 'early_stopping' is replaced by max_patience and min_delta (as in MDN / CRPS); "
+                          "early stopping on the validation loss is now always on.", FutureWarning, stacklevel=3)
+            if es:
+                if es.get('mode', 'min') != 'min' or es.get('monitor', 'val_loss') != 'val_loss':
+                    raise ValueError("Only early stopping on a decreasing validation loss is supported "
+                                     "(monitor='val_loss', mode='min').")
+                if 'patience' in es:
+                    params.setdefault('max_patience', es['patience'])
+                if 'min_delta' in es:
+                    params.setdefault('min_delta', es['min_delta'])
+        return params
+
+    def train(self, q_train, y_train, k_fold=None, train_test_ratio=0.8, random_seed=1997, split_type='shuffle',
+              device='cpu', **params):
         '''
         Trains the predictive model using the provided training data.
+
+        The options and the training procedure are the same as for the MDN and CRPS
+        models: early stopping on the validation loss (best weights restored),
+        learning-rate warm-up, gradient clipping, cross-validation with a fresh
+        network per fold followed by a final fit.
+
+        Devices: everything runs on the CPU unless a device such as 'cuda:1' is given
+        explicitly. Only the network's forward and backward passes run on that device;
+        the data and scaling stay on the CPU. After training the network is back on
+        the CPU and the GPU memory is released.
 
         Parameters:
         -----------
@@ -67,87 +111,101 @@ class DNN(PredictiveModel):
             Training input features
         y_train : pd.DataFrame
             Training target values
-        k_fold : int
-            Number of folds for cross-validation (default is None)
+        k_fold : int, optional
+            If given, run k-fold cross-validation on the training part first (losses
+            in self.cv_train_losses / self.cv_val_losses), then fit the final model.
         train_test_ratio : float, optional
-            Proportion of the dataset to include in the train split (default is 0.8)
+            Fraction of the rows used for training; the rest is the validation set
+            for early stopping (default 0.8)
         random_seed : int, optional
-            Random seed for reproducibility (default is 1997)
-        split_type : str, optional
-            Type of train-test split ('no_shuffle', 'shuffle', etc.) (default is 'no_shuffle')
+            Seed of the train/validation split and the cross-validation folds (default 1997)
+        split_type : {'shuffle', 'no_shuffle', 'reverse'}, optional
+            How the validation set is chosen (default 'shuffle'; 'no_shuffle' takes the last rows)
+        device : str, optional
+            'cpu' (default) or an explicit GPU such as 'cuda:1'.
         **params : dict
-            Additional training parameters for the training process (e.g., loss function, optimizer, epochs, batch size)
+            Passed to DNNInner.train_and_validate: gpu_memory_fraction, optimizer,
+            max_epoch, batch_size, val_batch_size, lr, weight_decay, max_patience,
+            min_delta, verbose, log_every, loss.
         '''
+        params = self._translate_legacy_options(params)
+        self._check_finite(q_train, y_train)
+        q_tr, q_vl, y_tr, y_vl = self.train_test_split(q_train, y_train, train_test_ratio=train_test_ratio,
+                                                       random_seed=random_seed, split_type=split_type)
+        # Keep only the training part as data of the model (as in MDN / CRPS)
+        self.samples, self.QoI = q_tr, y_tr
+        self.train_config = dict(params, device=str(device), split_type=split_type, random_seed=random_seed,
+                                 train_test_ratio=train_test_ratio)
 
-        self.train_config = params
-        self.q_scaler = self.get_scaler(q_train)
-        self.y_scaler = self.get_scaler(y_train)
-        xi = self.get_scaled_q(q_train)
-        yt = self.get_scaled_y(y_train) # y transformed
+        # Scalers are fitted on the training part only, so the validation rows stay unseen
+        self.q_scaler = self.get_scaler(q_tr)
+        self.y_scaler = self.get_scaler(y_tr)
+        xi_train, xi_val = self.get_scaled_q(q_tr), self.get_scaled_q(q_vl)
+        yt_train, yt_val = self.get_scaled_y(y_tr), self.get_scaled_y(y_vl)
         print(f'----- Training started for \'DNN\' model -----')
-        
+
         if k_fold is not None:
-            train_losses, val_losses = self.cross_validation(xi, yt, k_fold, **params)
-        else:
-            xi_train, xi_val, yt_train, yt_val = self.train_test_split(xi, yt, train_test_ratio=train_test_ratio, random_seed=random_seed, split_type=split_type)
-            train_losses, val_losses = self.train_and_validate(xi_train, yt_train, xi_val, yt_val, **params)
-        print(f"Average train loss: {np.mean(train_losses):.14f}, Average valid loss: {np.mean(val_losses):.14f}")      
+            self.cv_train_losses, self.cv_val_losses = self.cross_validation(
+                xi_train, yt_train, k_fold, random_seed=random_seed, device=device, **params)
+        self.train_and_validate(xi_train, yt_train, xi_val, yt_val, device=device, **params)
         print(f'----- Training ended for \'DNN\' model -----')
 
-    def train_and_validate(self, xi_train, yt_train, xi_val, yt_val, loss='mse', optimizer='adam', epochs=5, batch_size=64, early_stopping=None):
-        """ Train and validate the DNN model.
+    def train_and_validate(self, xi_train, yt_train, xi_val, yt_val, **params):
+        """ Fit a freshly initialized network (one cross-validation fold, or the final fit).
 
             Parameters
             ----------
-            xi_train : torch.Tensor
-                Training input features
-            yt_train : torch.Tensor
-                Training target values
-            xi_val : torch.Tensor
-                Validation input features
-            yt_val : torch.Tensor
-                Validation target values
-            loss : str, optional
-                Loss function to use (default is 'mse')
-            optimizer : str, optional
-                Optimizer to use (default is 'adam')
-            epochs : int, optional
-                Number of training epochs (default is 5)
-            batch_size : int, optional
-                Batch size for training (default is 64)
-            early_stopping : dict, optional
-                Early stopping configuration (default is None)
+            xi_train, yt_train, xi_val, yt_val : array_like or torch.Tensor
+                Scaled training and validation data
+            **params : dict
+                See DNNInner.train_and_validate.
 
             Returns
             -------
-            tr_loss : list of float
-                Training loss for each epoch
-            vl_loss : list of float
-                Validation loss for each epoch
+            tr_loss : float
+                Training loss of the last epoch.
+            vl_loss : float
+                Best validation loss.
         """
-        xi_tr,xi_vl = torch.tensor(xi_train, dtype=torch.float64), torch.tensor(xi_val, dtype=torch.float64)
-        yt_tr,yt_vl = torch.tensor(yt_train, dtype=torch.float64), torch.tensor(yt_val, dtype=torch.float64)
-        tr_loss, vl_loss = self.model.train_and_validate(xi_tr, yt_tr, xi_vl, yt_vl, loss=loss, optimizer=optimizer, epochs=epochs, batch_size=batch_size, early_stopping=early_stopping)
-        return tr_loss, vl_loss
+        params = self._translate_legacy_options(params)
+        as_tensor = lambda a: torch.as_tensor(np.asarray(a, dtype=np.float64))
+        self.model = self._build_inner()
+        _, history = self.model.train_and_validate(as_tensor(xi_train), as_tensor(yt_train),
+                                                   as_tensor(xi_val), as_tensor(yt_val), **params)
+        self.history = history
+        self.hyper_params = self.model.hyper_params
+        return history["train_loss"][-1], float(np.nanmin(history["val_loss"]))
 
-    def predict(self, q):
+    def predict(self, q, device=None, gpu_memory_fraction=None, batch_size=1024):
         """ Predict the target values for the given input features.
 
             Parameters
             ----------
             q : array_like or pandas.DataFrame
                 Input features for prediction
+            device : str, optional
+                Device of the forward pass: 'cpu' or e.g. 'cuda:1' (defaults to
+                self.predict_device, i.e. 'cpu')
+            gpu_memory_fraction : float, optional
+                GPU memory limit, see utils.gpu_utils.resolve_device
+            batch_size : int, optional
+                Rows per forward pass (default 1024)
 
             Returns
             -------
             y : array_like
                 Predicted target values
         """
+        if device is None:
+            device = getattr(self, 'predict_device', 'cpu')
+            if gpu_memory_fraction is None:
+                gpu_memory_fraction = getattr(self, 'predict_gpu_memory_fraction', None)
         if type(q) != pd.DataFrame:
             q = pd.DataFrame(q, columns=self.Q.variable_names())
         xi = self.get_scaled_q(q)
         xi = torch.tensor(xi, dtype=torch.float64)
-        y_t = self.model.predict(xi)
+        with use_device(self.model, device, gpu_memory_fraction):
+            y_t = self.model.predict(xi, batch_size=batch_size)
         y = self.get_orig_y(y_t)
         return y
 
@@ -204,7 +262,9 @@ class DNN(PredictiveModel):
         hyperparameters = []
         hyperparameter_settings = []
 
-        for hp_name, value in self.hyper_params.items():
+        # Models pickled before this version keep the settings on the inner network only.
+        hyper_params = getattr(self, 'hyper_params', None) or getattr(self.model, 'hyper_params', {})
+        for hp_name, value in hyper_params.items():
 
             if value is None:
                 continue
@@ -371,10 +431,11 @@ class DNN(PredictiveModel):
     class DNNInner(nn.Module):
         """ Inner class representing the DNN model architecture.
 
+            The network lives on the CPU; training and prediction move it to the
+            requested device only for the duration of the call.
+
             Attributes
             ----------
-            device : torch.device
-                Device on which the model is running (CPU or GPU)
             hidden_layers : nn.Sequential
                 Sequential container for hidden layers
             output_layer : nn.Sequential
@@ -384,7 +445,7 @@ class DNN(PredictiveModel):
             outputAF : nn.Module
                 Activation function for the output layer
         """
-        
+
         def __init__(self, input_size, output_size, layers, outputAF):
             """ Initializes the DNNInner model.
 
@@ -396,193 +457,214 @@ class DNN(PredictiveModel):
                 Number of output features
             layers : list of dict
                 List of dictionaries specifying the hidden layers configuration
+                ('neurons', 'activation', 'dropout'; missing keys or None use the
+                defaults 32, 'relu', 0.0)
             outputAF : str
                 Activation function for the output layer
             """
             super().__init__()
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             default_neurons = 32
             default_activation = 'relu'
             default_dropout = 0.0
 
-            # Define a mapping from string names to PyTorch activation functions
+            # Factories, so every layer gets its own module instance
             activation_mapping = {
-                'gelu': nn.GELU(),
-                'relu': nn.ReLU(),
-                'sigmoid': nn.Sigmoid(),
-                'tanh': nn.Tanh(),
-                'leakyrelu': nn.LeakyReLU(),
-                'softmax': nn.Softmax(dim=1),
-                'none': nn.Identity()
+                'gelu': nn.GELU,
+                'relu': nn.ReLU,
+                'sigmoid': nn.Sigmoid,
+                'tanh': nn.Tanh,
+                'leakyrelu': nn.LeakyReLU,
+                'softmax': lambda: nn.Softmax(dim=1),
+                'none': nn.Identity
             }
-            
-            self.outputAF = activation_mapping.get(outputAF.lower()) if outputAF else nn.Identity()
+
+            def make_activation(name):
+                if name.lower() not in activation_mapping:
+                    raise ValueError(f"Unknown activation '{name}'; use one of {list(activation_mapping)}")
+                return activation_mapping[name.lower()]()
+
+            self.outputAF = make_activation(outputAF) if outputAF else nn.Identity()
 
             hidden_layers = []
             prev_size = input_size
 
             # Build hidden layers
             for layer in layers:
-                neurons = default_neurons if layer['neurons'] is None else layer['neurons']
-                activation = default_activation if layer['activation'] is None else layer['activation']
-                dropout = default_dropout if layer['dropout'] is None else layer['dropout']
+                neurons = layer.get('neurons')
+                activation = layer.get('activation')
+                dropout = layer.get('dropout')
+                neurons = default_neurons if neurons is None else neurons
+                activation = default_activation if activation is None else activation
+                dropout = default_dropout if dropout is None else dropout
 
                 # Add Linear, Activation, and Dropout layers to the list
                 hidden_layers.append(nn.Linear(prev_size, neurons))
-                hidden_layers.append(activation_mapping.get(activation.lower()))
+                hidden_layers.append(make_activation(activation))
                 hidden_layers.append(nn.Dropout(dropout))
                 prev_size = neurons
 
             # Create Sequential model
             self.hidden_layers = nn.Sequential(*hidden_layers)
             self.output_layer = nn.Sequential(nn.Linear(prev_size, output_size), self.outputAF)
-            
-            self.all_layers = nn.Sequential(*hidden_layers, nn.Linear(prev_size, output_size), self.outputAF)
-            
-            self.to(self.device)
 
-        def train_and_validate(self, q_train, y_train, q_val, y_val, loss='mse', optimizer='adam', epochs=5, batch_size=64, early_stopping=None):
+            self.all_layers = nn.Sequential(*hidden_layers, nn.Linear(prev_size, output_size), self.outputAF)
+
+        @property
+        def device(self):
+            """ Device the network currently lives on (the CPU between calls). """
+            return next(self.parameters()).device
+
+        def get_batch_ixs(self, like_tensor, batch_size=16, permute=True):
+            if like_tensor.shape[0] <= batch_size:
+                return torch.arange(like_tensor.shape[0]).unsqueeze(0)
+            ixs = torch.randperm(like_tensor.shape[0]) if permute else torch.arange(like_tensor.shape[0])
+            return torch.tensor_split(ixs, ixs.shape[0] // batch_size)
+
+        def _validation_loss(self, X_val, y_val, criterion, device, batch_size):
+            """ Mean validation loss, computed in batches (the data stay on the CPU). """
+            total = 0.0
+            for start in range(0, X_val.shape[0], batch_size):
+                xb = X_val[start:start + batch_size].to(device)
+                yb = y_val[start:start + batch_size].to(device)
+                total += criterion(self(xb), yb).item() * xb.shape[0]
+            return total / X_val.shape[0]
+
+        def train_and_validate(self, X_train, y_train, X_val, y_val, device='cpu', gpu_memory_fraction=None,
+                               optimizer='adam', max_epoch=500, batch_size=64, val_batch_size=1024, lr=1e-3,
+                               weight_decay=1e-6, max_patience=20, min_delta=1e-6, verbose=False, log_every=10,
+                               loss='mse'):
             '''
-            Trains and validates the DNN model.
+            Train with early stopping on the validation loss (same procedure as MDN / CRPS).
+
+            The data stay on the CPU; only the current batch is moved to the device.
 
             Parameters
             ----------
-            q_train : torch.Tensor
-                Training input data.
-            y_train : torch.Tensor
-                Training target data.
-            q_val : torch.Tensor
-                Validation input data.
-            y_val : torch.Tensor
-                Validation target data.
-            loss : str, optional
-                Loss function to use ('mse', 'mae', 'crossentropy'). Default is
-                'mse'.
-            optimizer : str, optional
-                Optimizer to use ('adam', 'RMSprop'). Default is 'adam'.
-            epochs : int, optional
-                Number of training epochs. Default is 5.
+            X_train, y_train, X_val, y_val : torch.Tensor
+                Scaled training and validation data (float64, on the CPU).
+            device : str, optional
+                'cpu' (default) or an explicit GPU such as 'cuda:1'.
+            gpu_memory_fraction : float, optional
+                GPU memory limit, see utils.gpu_utils.resolve_device.
+            optimizer : {'adam', 'adamw', 'rmsprop'}, optional
+                Optimizer (default 'adam').
+            max_epoch : int, optional
+                Maximum number of epochs (default 500).
             batch_size : int, optional
-                Batch size for training. Default is 64.
-            early_stopping : dict, optional
-                Early stopping configuration with keys:
-                'patience': int
-                    Number of epochs with no improvement to wait before stopping.
-                'min_delta': float
-                    Minimum change to qualify as an improvement.
-                'monitor': str
-                    Metric to monitor ('val_loss', 'val_accuracy').
-                'mode': str
-                    'min' for loss, 'max' for accuracy. Default is None (no early stopping).
+                Training batch size (default 64).
+            val_batch_size : int, optional
+                Batch size of the validation pass (default 1024).
+            lr : float, optional
+                Learning rate (default 1e-3), warmed up linearly from lr/10 over 10 epochs.
+            weight_decay : float, optional
+                Weight decay (default 1e-6).
+            max_patience : int, optional
+                Stop after this many epochs without improvement (default 20).
+            min_delta : float, optional
+                Minimum decrease of the validation loss that counts as an improvement (default 1e-6).
+            verbose : bool, optional
+                Print the losses (default False).
+            log_every : int, optional
+                With verbose, print every log_every epochs (default 10).
+            loss : {'mse', 'mae', 'crossentropy'}, optional
+                Training loss (default 'mse'). DNN only: MDN and CRPS have fixed losses.
 
             Returns
             -------
-            train_loss : float
-                Final training loss.
-            val_loss : float
-                Final validation loss.
+            self
+                The trained network (best validation state), on the CPU.
+            dict
+                History with keys 'epoch', 'train_loss', 'val_loss'.
             '''
-
             self.batch_size = batch_size
-            train_loader = DataLoader(TensorDataset(q_train, y_train), batch_size=batch_size, shuffle=True)
-            val_loader = DataLoader(TensorDataset(q_val, y_val), batch_size=batch_size, shuffle=False)
-            
-            # Define a mapping from string names to PyTorch criterion functions
-            criterion_mapping = {
-                'mse': nn.MSELoss(),
-                'mae': nn.L1Loss(),
-                'crossentropy': nn.CrossEntropyLoss()
-            }
-            criterion = criterion_mapping.get(loss.lower())
 
-            # Define a mapping from string names to PyTorch optimizer functions
-            optimizer_mapping = {
-                'adamw': optim.AdamW(self.parameters()),
-                'adam': optim.Adam(self.parameters()),
-                'RMSprop': optim.RMSprop(self.parameters())
-            }
-            optimizer = optimizer_mapping.get(optimizer.lower())
+            criterion_mapping = {'mse': nn.MSELoss, 'mae': nn.L1Loss, 'crossentropy': nn.CrossEntropyLoss}
+            if loss.lower() not in criterion_mapping:
+                raise ValueError(f"Unknown loss '{loss}'; use one of {list(criterion_mapping)}")
+            criterion = criterion_mapping[loss.lower()]()
+
+            optimizers = {'adamw': optim.AdamW, 'adam': optim.Adam, 'rmsprop': optim.RMSprop}
+            if optimizer.lower() not in optimizers:
+                raise ValueError(f"Unknown optimizer '{optimizer}'; use one of {list(optimizers)}")
 
             self.hyper_params = {
                 'loss': criterion.__class__.__name__,
-                'optimizer': optimizer.__class__.__name__,
-                'epochs': epochs,
+                'optimizer': optimizers[optimizer.lower()].__name__,
+                'max_epoch': max_epoch,
                 'batch_size': batch_size,
-                'early_stopping': early_stopping
+                'lr': lr,
+                'weight_decay': weight_decay,
+                'max_patience': max_patience,
+                'min_delta': min_delta,
             }
-            
-            # Early stopping initialization
-            if early_stopping is not None:
-                # Extract parameters with defaults
-                patience = early_stopping.get('patience', 15)
-                min_delta = early_stopping.get('min_delta', 0.0)
-                monitor = early_stopping.get('monitor', 'val_loss')  # e.g., 'val_loss', 'val_accuracy'
-                mode = early_stopping.get('mode', 'min')  # 'min' for loss, 'max' for accuracy
 
-                # Initialize tracking variables based on mode
-                best_metric = float('inf') if mode == 'min' else -float('inf')
-                epochs_no_improve = 0
-                early_stop = False
-                best_model_state = None  # To store the best model's state
+            history = {"epoch": [], "train_loss": [], "val_loss": []}
+            # The loop runs in its own method, so all its GPU tensors (batches, optimizer
+            # state) are freed before use_device releases the GPU memory.
+            with use_device(self, device, gpu_memory_fraction) as dev:
+                best_state = self._fit(dev, X_train, y_train, X_val, y_val, history, criterion,
+                                       optimizers[optimizer.lower()], max_epoch, batch_size, val_batch_size,
+                                       lr, weight_decay, max_patience, min_delta, verbose, log_every)
 
-            for epoch in range(epochs+1):
+            self.load_state_dict(best_state)
+            self.eval()
+            return self, history
+
+        def _fit(self, dev, X_train, y_train, X_val, y_val, history, criterion, optimizer_cls, max_epoch, batch_size,
+                 val_batch_size, lr, weight_decay, max_patience, min_delta, verbose, log_every):
+            """ Training loop; returns the best state (on the CPU). """
+            opt = optimizer_cls(self.parameters(), lr=lr, weight_decay=weight_decay)
+            scheduler = torch.optim.lr_scheduler.LinearLR(opt, start_factor=0.1, total_iters=10)
+            # Snapshots of the best weights are kept on the CPU, not on the GPU.
+            best_val, best_state, bad_epochs = float("inf"), self._cpu_state(), 0
+
+            for epoch in range(max_epoch):
                 self.train()
-                running_loss = 0.0
-                for inputs, labels in train_loader:
-                    inputs, labels = inputs.to(self.device), labels.to(self.device)
-                    optimizer.zero_grad()
-                    outputs = self(inputs)
-                    loss = criterion(outputs, labels)
+                losses = []
+                for ixs in self.get_batch_ixs(X_train, batch_size, permute=True):
+                    xb, yb = X_train[ixs].to(dev), y_train[ixs].to(dev)
+                    opt.zero_grad()
+                    loss = criterion(self(xb), yb)
                     loss.backward()
-                    optimizer.step()
-                    running_loss += loss.item()   
-                avg_train_loss = running_loss / len(train_loader)
+                    torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=10)
+                    opt.step()
+                    losses.append(loss.item())
+                scheduler.step()
 
-                # Validation phase
                 self.eval()
-                val_loss = 0.0
                 with torch.no_grad():
-                    for inputs, labels in val_loader:
-                        inputs, labels = inputs.to(self.device), labels.to(self.device)
-                        outputs = self(inputs)
-                        loss = criterion(outputs, labels)
-                        val_loss += loss.item()
-                avg_val_loss = val_loss / len(val_loader)
-                
-                # Calculate monitored metric (for simplicity, we only track val_loss here)
-                monitored_value = avg_val_loss  # Replace with your metric (e.g., accuracy) if needed
+                    val_loss = self._validation_loss(X_val, y_val, criterion, dev, val_batch_size)
+                train_loss = float(np.mean(losses))
 
-                
-                if epoch % 50 == 0:
-                    print(f"Epoch [{epoch}/{epochs}], train loss: {avg_train_loss:.4f}, validation loss: {avg_val_loss:.4f}")
-                
-                # Early stopping logic
-                if early_stopping is not None:
-                    if mode == 'min':
-                        improvement = (monitored_value < best_metric - min_delta)
-                    elif mode == 'max':
-                        improvement = (monitored_value > best_metric + min_delta)
-                    else:
-                        raise ValueError(f"Invalid mode: {mode}. Use 'min' or 'max'.")
+                history["epoch"].append(epoch)
+                history["train_loss"].append(train_loss)
+                history["val_loss"].append(val_loss)
 
-                    if improvement:
-                        best_metric = monitored_value
-                        epochs_no_improve = 0
-                        best_model_state = self.state_dict().copy()  # Save best model
-                    else:
-                        epochs_no_improve += 1
-                        if epochs_no_improve >= patience:
-                            print(f'Early stopping triggered after {epoch + 1} epochs!')
-                            early_stop = True
-                            break
+                if verbose and (epoch % log_every == 0 or epoch == max_epoch - 1):
+                    print(f"epoch {epoch:4d} | train {train_loss:.4f} | val {val_loss:.4f}")
 
-            # Restore the best model if early stopping was triggered
-            if early_stopping is not None and early_stop:
-                print(f'Training stopped early. Restoring best model (monitored {monitor} = {best_metric:.4f}).')
-                self.load_state_dict(best_model_state)
-            else:
-                print('Training completed without early stopping.')  
-            return avg_train_loss, avg_val_loss
+                if not (np.isfinite(val_loss) and np.isfinite(train_loss)):
+                    if not np.isfinite(best_val):
+                        raise FloatingPointError(
+                            f"Loss is not finite at epoch {epoch} (train {train_loss}, val {val_loss}) and no "
+                            f"earlier epoch was valid; the network did not train. Try a lower lr, other "
+                            f"layers, or check the data for NaN/inf.")
+                    warnings.warn(f"Loss became non-finite at epoch {epoch}; stopping and keeping the best "
+                                  f"state (val loss {best_val:.4f}).")
+                    break
+
+                if val_loss < best_val - min_delta:
+                    best_val, best_state, bad_epochs = val_loss, self._cpu_state(), 0
+                else:
+                    bad_epochs += 1
+                if bad_epochs > max_patience:
+                    if verbose:
+                        print(f"Early stopping at epoch {epoch} (best val loss {best_val:.4f})")
+                    break
+            return best_state
+
+        def _cpu_state(self):
+            return {k: v.detach().to("cpu", copy=True) for k, v in self.state_dict().items()}
 
         def forward(self, x):
             '''
@@ -597,20 +679,22 @@ class DNN(PredictiveModel):
             -------
             out_x : torch.Tensor
                 Output tensor after passing through the network.
-            '''        
+            '''
 
             out_x = self.all_layers(x)
             return out_x
 
 
-        def predict(self, q):
+        def predict(self, q, batch_size=1024):
             '''
-            Makes predictions using the trained model.
+            Makes predictions on the network's current device, in batches.
 
             Parameters
             ----------
             q : torch.Tensor
-                Input data for prediction.
+                Input data for prediction (on the CPU).
+            batch_size : int, optional
+                Rows per forward pass (default 1024).
 
             Returns
             -------
@@ -618,23 +702,18 @@ class DNN(PredictiveModel):
                 Predicted outputs as a numpy array.
             '''
 
-            self.eval()  # Set the model to evaluation mode
-            test_loader = DataLoader(q, batch_size=64, shuffle=False)  # Create DataLoader for test data
-            predictions = []  # List to store the predictions
-
-            with torch.no_grad():  # Disable gradient calculation as we only need predictions
-                for inputs in test_loader:  # We don't need the labels (targets), so we use "_" to ignore them
-                    inputs = inputs.to(self.device)
-                    outputs = self(inputs)  # Get the model's predictions (outputs)
-                    predictions.extend(outputs.cpu().numpy())  # Add the predictions to the list (move to CPU and convert to numpy)     
-            predictions = np.array(predictions)
-
-            return predictions  # Return the list of predictions
+            self.eval()
+            device = self.device
+            predictions = []
+            with torch.no_grad():
+                for start in range(0, q.shape[0], batch_size):
+                    predictions.append(self(q[start:start + batch_size].to(device)).cpu().numpy())
+            return np.concatenate(predictions)
 
 
         def compute_shap_values(self, q, predict_fn, forced=False, explainer_type="kernelexplainer", silent=False):
             '''
-            Computes SHAP values for model interpretability.
+            Computes SHAP values for model interpretability, on the CPU.
 
             Parameters
             ----------
@@ -646,48 +725,36 @@ class DNN(PredictiveModel):
                 If True, forces re-computation of SHAP values even if already computed.
             explainer_type : str, optional
                 Type of SHAP explainer to use ('deepexplainer' or 'kernelexplainer'). Default is 'kernelexplainer'.
-            
+
             Returns
             -------
             shap_values : np.ndarray
                 Computed SHAP values for the input data.
             '''
-            
+
             self.eval()
             if explainer_type == "deepexplainer":
-                # Determine device
-                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                self.to(device)
-                
+                # The network stays on the CPU (no automatic move to a GPU)
+                self.to('cpu')
+
                 # Prepare input
                 if isinstance(q, pd.DataFrame):
-                    xi = torch.from_numpy(q.values).double().to(device)
+                    xi = torch.from_numpy(q.values).double()
                 elif isinstance(q, np.ndarray):
-                    xi = torch.from_numpy(q).double().to(device)
+                    xi = torch.from_numpy(q).double()
                 elif isinstance(q, torch.Tensor):
-                    xi = q.double().to(device)
+                    xi = q.double().cpu()
                 else:
                     raise ValueError(f"Input q must be a numpy array or a torch tensor. The type of q is: {type(q)}")
-                
-                #xi = torch.tensor(xi, dtype=torch.float64)
+
                 if hasattr(self, 'explainer') == False or forced == True:
-                    print(type(xi))
-                    self.eval()
-                    explainer = shap.DeepExplainer(self, xi)
-                    self.explainer = explainer
-                    #shap_values = explainer.shap_values(xi)
-                self.eval()
-                shap_values = self.explainer(xi, silent=silent)
+                    self.explainer = shap.DeepExplainer(self, xi)
+                shap_values = self.explainer(xi)       # DeepExplainer takes no 'silent' argument
             elif explainer_type == "kernelexplainer":
                 if hasattr(self, 'explainer') == False or forced == True:
                     explainer = shap.KernelExplainer(predict_fn, q)
                     self.explainer = explainer
                 shap_values = self.explainer(q, silent=silent)
+            else:
+                raise ValueError(f"Unknown explainer_type '{explainer_type}'")
             return shap_values
-
-
-
-
-
-    
-

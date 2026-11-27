@@ -5,13 +5,30 @@ from abc import ABC, abstractmethod
 from sklearn.model_selection import train_test_split, KFold
 import numpy as np
 import pandas as pd
-from .plotting_functions import plot_remained_effects, plot_shap_single_waterfall, plot_shap_multiple_waterfalls, plot_shap_beeswarm, plot_effects, plot_sobol_sensitivity
+from .plotting_functions import plot_shap_single_waterfall, plot_shap_multiple_waterfalls, plot_shap_beeswarm, plot_effects, plot_sobol_sensitivity
+from ..utils.weather_effect_subtraction import plot_effect_alert, plot_remained_effects_over_time
+from ..utils.reference_mapping import reference_scores, outlier_alert
+import io
 import os
 import pickle
+import sys
 from sklearn.metrics import mean_squared_error
 from scipy.stats import kendalltau, pearsonr, spearmanr
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from SALib.analyze import sobol
+
+
+def _tensor_from_bytes_on_cpu(data):
+    import torch
+    return torch.load(io.BytesIO(data), map_location='cpu', weights_only=False)
+
+
+class _CPUUnpickler(pickle.Unpickler):
+    """ Unpickler that loads tensors pickled on a GPU onto the CPU. """
+    def find_class(self, module, name):
+        if module == 'torch.storage' and name == '_load_from_bytes':
+            return _tensor_from_bytes_on_cpu
+        return super().find_class(module, name)
 
 
 class PredictiveModel(ABC):
@@ -117,7 +134,17 @@ class PredictiveModel(ABC):
 
 
 
-    def cross_validation(self, xi, yt, k_fold, **params):
+    @staticmethod
+    def _check_finite(q, y):
+        """ Raise a clear error if the training data contain NaN or inf. """
+        for name, data in (('q', q), ('y', y)):
+            values = np.asarray(data, dtype=float)
+            if not np.isfinite(values).all():
+                rows = np.where(~np.isfinite(values.reshape(len(values), -1)).all(axis=1))[0]
+                raise ValueError(f"{name} contains NaN or inf in {len(rows)} row(s), e.g. rows {rows[:5].tolist()}. "
+                                 f"Remove or impute them before training.")
+
+    def cross_validation(self, xi, yt, k_fold, random_seed=None, **params):
         '''
         Performs k-fold cross-validation for model training.
 
@@ -129,6 +156,8 @@ class PredictiveModel(ABC):
             Target values
         k_fold : int
             Number of folds for cross-validation
+        random_seed : int, optional
+            Seed of the fold shuffling (default None: different folds every run)
         **params : dict
             Additional training parameters
 
@@ -141,7 +170,7 @@ class PredictiveModel(ABC):
         '''
 
         train_losses, val_losses = [], []
-        kf = KFold(n_splits=k_fold, shuffle=True)
+        kf = KFold(n_splits=k_fold, shuffle=True, random_state=random_seed)
         for fold, (train_indices, val_indices) in enumerate(kf.split(xi)):
             print(f"Fold {fold + 1}/{k_fold}")
             xi_train, xi_val = xi[train_indices], xi[val_indices]
@@ -204,6 +233,45 @@ class PredictiveModel(ABC):
 
         # Restore the instance state
         self.__dict__.update(state)
+        # Torch networks are kept on the CPU between calls, also when an old file
+        # pickled them on a GPU.
+        torch = sys.modules.get('torch')
+        model = state.get('model')
+        if torch is not None and isinstance(model, torch.nn.Module):
+            model.to('cpu')
+
+    @classmethod
+    def load_model(cls, source, trusted=False):
+        '''
+        Loads a model saved by save_model ('.sm'), on the CPU.
+
+        Tensors pickled on a GPU (e.g. a DNN trained by an older version, which
+        moved itself to the GPU automatically) are mapped to the CPU, so the file
+        also opens on machines without a GPU and never lands on a shared GPU.
+
+        Parameters:
+        -----------
+        source : str, os.PathLike or bytes
+            File path, or the bytes returned by save_model() without a name.
+        trusted : bool
+            Must be True: unpickling can run arbitrary code, so only load files
+            you created yourself.
+
+        Returns:
+        -------
+        PredictiveModel
+        '''
+        if not trusted:
+            raise ValueError("Model files are pickles. Unpickling can run arbitrary code, so only load files "
+                             "you created yourself: pass trusted=True.")
+        if isinstance(source, (bytes, bytearray)):
+            obj = _CPUUnpickler(io.BytesIO(source)).load()
+        else:
+            with open(source, 'rb') as file:
+                obj = _CPUUnpickler(file).load()
+        if not isinstance(obj, cls):
+            raise ValueError(f"The file holds a {type(obj).__name__}, not a {cls.__name__}.")
+        return obj
     
     def save_shap_model(self, name, path=None):
         '''
@@ -541,29 +609,56 @@ class PredictiveModel(ABC):
         return error_ratio, problematic_rows
     
     
-    async def plot_subtract_effects_and_alert(self, X_train, y_train, q, QoI, subtracted_params, threshold_ratio=0.1, xticks=True, silent=False):
+    async def plot_subtract_effects_and_alert(self, X_train, y_train, q, QoI, subtracted_params, threshold_ratio=0.1,
+                                              xticks=True, silent=False, alpha=0.01, tails='extrapolate'):
         '''
-        Plots the effects after subtracting specified parameter effects and checks for alerts.
+        Subtracts the effects of specified parameters (SHAP), plots the result and checks for alerts.
+
+        Same figure and alarm as ProbabilisticModel.plot_subtract_effects_and_alert, but
+        the model gives no distribution, so the scores are defined relative to the
+        reference remained effects (the remained effects of X_train, y_train, pooled
+        over all conditions):
+        - marginal score of output j: z_j = Phi^-1(F_ref,j(r_j)), with the empirical
+          CDF of the reference (tails extrapolated beyond the reference range);
+        - joint scores: w = A^-1 z with the Gaussian copula of the reference,
+          R = A A^T; d2 = sum_j w_j^2 = z^T R^-1 z ~ chi2(D), independent of the order.
+        A measurement is an outlier if d2 exceeds the chi2(D) quantile 1 - alpha; the
+        alert is raised if more than threshold_ratio of the monitoring measurements
+        are outliers.
+
+        Notes:
+        - The reference spread is that of X_train, y_train. Remained effects of the
+          training data are in-sample (the model was fitted to them) and are usually
+          narrower than those of new healthy data, which gives too many outliers. Pass
+          held-out healthy data (e.g. the test split) as X_train, y_train if possible.
+        - The reference distribution is the same for all conditions: changes of the
+          scatter with the environment are not modelled (the probabilistic models do).
 
         Parameters:
         -----------
         X_train : pd.DataFrame
-            Training input features
+            Healthy reference input features (preferably held-out data).
         y_train : pd.DataFrame
-            Training target values
+            Healthy reference target values.
         q : pd.DataFrame
             Input features for monitoring
         QoI : pd.DataFrame
-            Quantity of Interest values for monitoring
+            Quantity of Interest values for monitoring. A DatetimeIndex is used as time axis.
         subtracted_params : list
             List of parameter names whose effects are to be subtracted
         threshold_ratio : float
-            Threshold ratio for alerting (default is 0.1)
+            Alert if more than this fraction of the monitoring measurements are
+            outliers (default 0.1; healthy data give about alpha).
         xticks : bool
-            If True, includes x-ticks in the plot (default is True)
+            If True, shows the output names on the per-output panel (default is True)
+        alpha : float
+            Outlier level of a single measurement (default 0.01).
+        tails : {'extrapolate', 'clip'}
+            Scores beyond the reference range: continued with the tail slope of the
+            reference (default), or clipped at the most extreme reference value.
 
         Returns:
-        ------- 
+        -------
         fig : matplotlib.figure.Figure
             Figure object of the plot
         alert : bool
@@ -571,47 +666,60 @@ class PredictiveModel(ABC):
         remained_effects_df : pd.DataFrame
             DataFrame of remained effects after subtraction
         error_ratio : float
-            Ratio of errors exceeding the threshold
+            Fraction of monitoring measurements that are outliers
         problematic_rows : pd.DataFrame
-            DataFrame of rows with errors exceeding the threshold
+            Marginal scores of the outlying measurements and their distance 'd2'
         reference_statistics : pd.DataFrame
-            Statistics of the remained training effects
+            Statistics of the remained reference effects (with the outlier ratio)
         monitoring_statistics : pd.DataFrame
-            Statistics of the remained measured effects        
+            Statistics of the remained measured effects (with the outlier ratio)
         '''
 
-        alert = False
-        remained_train_effects = await self.subtract_effects(X_train, pd.DataFrame(y_train), subtracted_params, silent=silent)
-        QoI_names = remained_train_effects.columns
-        reference_statistics = round(remained_train_effects.describe().T, 4).reindex(columns=['25%', '50%', '75%', 'count', 'max', 'mean', 'min', 'std'])
-        remained_train_effects = remained_train_effects.values
+        remained_ref = await self.subtract_effects(X_train, pd.DataFrame(y_train), subtracted_params, silent=silent)
+        remained_mon = await self.subtract_effects(q, QoI, subtracted_params, silent=silent)
+        columns = remained_mon.columns
+        marg_ref, joint_ref, marg_mon, joint_mon = reference_scores(remained_ref.to_numpy(dtype=float),
+                                                                    remained_mon.to_numpy(dtype=float), tails=tails)
+        frame = lambda a, index: pd.DataFrame(a, columns=columns, index=index)
+        marg_ref, joint_ref = frame(marg_ref, remained_ref.index), frame(joint_ref, remained_ref.index)
+        marg_mon, joint_mon = frame(marg_mon, remained_mon.index), frame(joint_mon, remained_mon.index)
 
-        higher_bound = np.max(remained_train_effects, axis=0)
-        lower_bound = np.min(remained_train_effects, axis=0)
-        magnitudes = (higher_bound - lower_bound)
-        mean_train = higher_bound - magnitudes / 2
-        margin = magnitudes * threshold_ratio
+        res = outlier_alert(joint_ref, joint_mon, marg_ref, marg_mon, remained_ref, remained_mon, alpha,
+                            threshold_ratio)
+        if not silent:
+            print(f"Message: {res['error_ratio']:.1%} of the monitoring measurements are outliers at level "
+                  f"alpha={alpha} (reference data: {res['reference_ratio']:.1%}); alert threshold "
+                  f"{threshold_ratio:.1%} -> {'ALERT' if res['alert'] else 'no alert'}.")
+        fig = plot_effect_alert(res['d2_ref'], res['d2_mon'], marg_ref, marg_mon, res['limit'], alpha,
+                                res['z_single'], res['alert'], threshold_ratio, xticks=xticks,
+                                reference_is_check=False, method=f'{type(self).__name__} SHAP subtraction')
+        return (fig, res['alert'], remained_mon, res['error_ratio'], res['problematic_rows'],
+                res['reference_statistics'], res['monitoring_statistics'])
 
-        remained_measured_effects = await self.subtract_effects(q, QoI, subtracted_params, silent=silent)
-        monitoring_statistics = round(remained_measured_effects.describe().T, 4).reindex(columns=['25%', '50%', '75%', 'count', 'max', 'mean', 'min', 'std'])
-        remained_measured_effects = remained_measured_effects.values
+    async def plot_remained_effects_over_time(self, X_train, y_train, q, QoI, subtracted_params, outputs=None,
+                                              band=(0.01, 0.99), ratio=0.05, silent=False):
+        '''
+        Remained effects of the monitoring data over time, in physical units, against
+        the band of the reference remained effects (see
+        plotting_functions.plot_remained_effects_over_time).
 
-        higher_measured_bound = np.max(remained_measured_effects, axis=0)
-        lower_measured_bound = np.min(remained_measured_effects, axis=0)
+        Parameters:
+        -----------
+        X_train, y_train, q, QoI, subtracted_params :
+            As in plot_subtract_effects_and_alert.
+        outputs : list of str, optional
+            Outputs to show (default: the first 6).
+        band : tuple of float
+            Quantiles of the reference band (default 1% - 99%).
 
-        remained_effects_df = pd.DataFrame(remained_measured_effects, columns=QoI_names)
-        measured_errors_df = pd.DataFrame((remained_measured_effects - mean_train) / magnitudes, columns=QoI_names)
+        Returns:
+        -------
+        fig : matplotlib.figure.Figure
+        '''
+        remained_ref = await self.subtract_effects(X_train, pd.DataFrame(y_train), subtracted_params, silent=silent)
+        remained_mon = await self.subtract_effects(q, QoI, subtracted_params, silent=silent)
+        return plot_remained_effects_over_time(remained_ref, remained_mon, outputs=outputs, band=band, ratio=ratio)
 
-        error_ratio, problematic_rows = self.calculate_error_ratios(measured_errors_df, threshold_ratio)
-
-        for i in range(len(higher_measured_bound)):
-            if (higher_measured_bound[i] > higher_bound[i] + margin[i]) or (lower_measured_bound[i] < lower_bound[i] - margin[i]):
-                alert = True
-                break
-        fig = plot_remained_effects(higher_bound, lower_bound, margin, higher_measured_bound, lower_measured_bound, QoI_names, xticks)
-        return fig, alert, remained_effects_df, error_ratio, problematic_rows, reference_statistics, monitoring_statistics
-
-        
     async def plot_shap_single_waterfall(self, X_test, silent=True, **kwargs):
         '''
         Plots a single SHAP waterfall plot for the model predictions.

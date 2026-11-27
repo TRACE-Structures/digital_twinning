@@ -1,49 +1,49 @@
-"""Store modal-analysis simulation results in an HDF5 file, one simulation at a time,
-with the input variables described by an ``uncertain_variables.VariableSet``.
+""" Store modal-analysis simulation results in an HDF5 file, one simulation at a time,
+    with the input variables described by an ``uncertain_variables.VariableSet``.
 
-Layout:
+    Layout:
 
-    nodes/coordinates                                   (n_nodes, 3)               float64
-    nodes/node_id                                       (n_nodes,)                 int32
-    simulations/simulation_id                           (n_sims,)                  int32
-    simulations/status                                  (n_sims,)                  int8
-    simulations/error_message                           (n_sims,)                  string
-    simulations/input_variables/distribution_parameters (n_vars,)                  compound
-    simulations/input_variables/samples                 (n_sims, n_vars)           float64
-    simulations/mode/frequencies                        (n_sims, n_modes)          float64
-    simulations/mode/mode_shapes/{ux,uy,uz}             (n_sims, n_modes, n_nodes) float64
-        (only the components chosen at creation, listed in the group's
-         "components" attribute, e.g. ["ux", "uy"] for an in-plane model)
+        nodes/coordinates                                   (n_nodes, 3)               float64
+        nodes/node_id                                       (n_nodes,)                 int32
+        simulations/simulation_id                           (n_sims,)                  int32
+        simulations/status                                  (n_sims,)                  int8
+        simulations/error_message                           (n_sims,)                  string
+        simulations/input_variables/distribution_parameters (n_vars,)                  compound
+        simulations/input_variables/samples                 (n_sims, n_vars)           float64
+        simulations/mode/frequencies                        (n_sims, n_modes)          float64
+        simulations/mode/mode_shapes/{ux,uy,uz}             (n_sims, n_modes, n_nodes) float64
+            (only the components chosen at creation, listed in the group's
+            "components" attribute, e.g. ["ux", "uy"] for an in-plane model)
 
-``distribution_parameters`` has one record per variable, in VariableSet order:
+    ``distribution_parameters`` has one record per variable, in VariableSet order:
 
-    name               variable name
-    distribution       Q.get_dist_types() entry, e.g. "unif", "norm", "translated"
-    base_distribution  for "translated": type of the wrapped distribution, else ""
-    parameters         Q.get_dist_params() entry as a float array; for
-                       "translated": base parameters followed by shift, scale, center
+        name               variable name
+        distribution       Q.get_dist_types() entry, e.g. "unif", "norm", "translated"
+        base_distribution  for "translated": type of the wrapped distribution, else ""
+        parameters         Q.get_dist_params() entry as a float array; for
+                        "translated": base parameters followed by shift, scale, center
 
-Workflow:
+    Workflow:
 
-    create_simulation_file(path, Q, samples, n_modes, coords, node_ids=...)
-    for i in pending_simulations(path):
-        try:
-            ...run the solve...
-            write_simulation_result(path, i, freqs, shapes, node_ids=...)
-        except Exception as exc:
-            mark_failed(path, i, str(exc))
+        create_simulation_file(path, Q, samples, n_modes, coords, node_ids=...)
+        for i in pending_simulations(path):
+            try:
+                ...run the solve...
+                write_simulation_result(path, i, freqs, shapes, node_ids=...)
+            except Exception as exc:
+                mark_failed(path, i, str(exc))
 
-    samples, qoi, Q = read_simulation_file(path)
+        samples, qoi, Q = read_simulation_file(path)
 
-    # Or import existing results in the read_simulation_file format
-    dataframes_to_hdf5(path, Q, "x_df.csv", "y_df.csv")
+        # Or import existing results in the read_simulation_file format
+        dataframes_to_hdf5(path, Q, "x_df.csv", "y_df.csv")
 
-The ``nodes`` group's ``coordinates_missing`` attribute is True when the file
-was created without node coordinates (they are then stored as NaN).
+    The ``nodes`` group's ``coordinates_missing`` attribute is True when the file
+    was created without node coordinates (they are then stored as NaN).
 
-Results not yet written are NaN. ``status`` is 0 = pending, 1 = done, -1 = failed.
-Each write opens and closes the file, so a crash loses at most the running solve.
-Only one process should write to the file at a time.
+    Results not yet written are NaN. ``status`` is 0 = pending, 1 = done, -1 = failed.
+    Each write opens and closes the file, so a crash loses at most the running solve.
+    Only one process should write to the file at a time.
 """
 
 from __future__ import annotations
@@ -98,11 +98,23 @@ RECORD_DTYPE = np.dtype([
 # VariableSet <-> compound records
 # ---------------------------------------------------------------------------
 def _as_float_array(params) -> np.ndarray:
-    """get_dist_params() returns a scalar, list or tuple depending on the class."""
+    """ get_dist_params() returns a scalar, list or tuple depending on the class."""
     return np.atleast_1d(np.asarray(params, dtype=np.float64))
 
 
 def _variable_set_to_records(Q: VariableSet) -> np.ndarray:
+    """ Convert a VariableSet into an array of compound records suitable for HDF5 storage.
+    
+        Parameter
+        ---------
+        Q : VariableSet
+            The VariableSet to convert.
+
+        Returns
+        -------
+        records : np.ndarray
+            An array of compound records suitable for HDF5 storage.
+    """
     variables = Q.get_variables()
     names = list(variables)
     dists = list(variables.values())
@@ -157,11 +169,29 @@ def _variable_set_to_records(Q: VariableSet) -> np.ndarray:
 
 
 def _decode(v) -> str:
+    """ Decode a value from bytes to string if necessary."""
+
     return v.decode("utf-8") if isinstance(v, bytes) else str(v)
 
 
 def _records_to_variable_set(records: np.ndarray, normalized: bool,
                              registry: Mapping | None = None) -> VariableSet:
+    """ Convert an array of compound records back into a VariableSet.
+
+        Parameters
+        ----------
+        records : np.ndarray
+            The array of compound records.
+        normalized : bool
+            Whether the resulting VariableSet should be normalized.
+        registry : Mapping | None, optional
+            Additional distribution classes to consider, by default None.
+
+        Returns
+        -------
+        Q : VariableSet
+            The reconstructed VariableSet.
+    """
     classes = {**DISTRIBUTION_CLASSES, **(registry or {})}
     Q = VariableSet(normalized=normalized)
     for rec in records:
@@ -189,8 +219,19 @@ def _records_to_variable_set(records: np.ndarray, normalized: bool,
 # Helpers
 # ---------------------------------------------------------------------------
 def normalize_components(components) -> tuple[str, ...]:
-    """Turn "xy", ["x", "y"], ("ux", "uz"), ... into a tuple of dataset names
-    in canonical order, e.g. ("ux", "uy")."""
+    """ Turn "xy", ["x", "y"], ("ux", "uz"), ... into a tuple of dataset names
+        in canonical order, e.g. ("ux", "uy").
+        
+        Parameters
+        ----------
+        components : str | Sequence[str]
+            The components to normalize.
+
+        Returns
+        -------
+        tuple[str, ...]
+            The normalized components in canonical order.
+        """
     if isinstance(components, str):
         components = [components] if components in ALL_COMPONENTS else list(components)
     out = set()
@@ -204,10 +245,23 @@ def normalize_components(components) -> tuple[str, ...]:
         out.add(name)
     if not out:
         raise ValueError("At least one component is required")
-    return tuple(c for c in ALL_COMPONENTS if c in out)
+    normalized = tuple(c for c in ALL_COMPONENTS if c in out)
+    return normalized
 
 
 def _file_components(f: h5py.File) -> tuple[str, ...]:
+    """ Return the components stored in the HDF5 file, in canonical order.
+    
+        Parameters
+        ----------
+        f : h5py.File
+            The HDF5 file to inspect.
+
+        Returns
+        -------
+        components : tuple[str, ...]
+            The components stored in the file, in canonical order.
+        """
     ms = f["simulations/mode/mode_shapes"]
     if "components" in ms.attrs:
         return tuple(str(c) for c in ms.attrs["components"])
@@ -215,11 +269,26 @@ def _file_components(f: h5py.File) -> tuple[str, ...]:
 
 
 def _split_components(mode_shapes, ndim: int, components) -> dict[str, np.ndarray]:
-    """Accept a dict {component: array of ``ndim`` dims} with exactly
-    ``components`` as keys (``"x"`` or ``"ux"`` style), or one array with an
-    extra trailing axis holding the components in x, y, z order. With a single
-    component, an array of ``ndim`` dims without the trailing axis is accepted
-    too. Returns {dataset name: array}."""
+    """ Accept a dict {component: array of ``ndim`` dims} with exactly
+        ``components`` as keys (``"x"`` or ``"ux"`` style), or one array with an
+        extra trailing axis holding the components in x, y, z order. With a single
+        component, an array of ``ndim`` dims without the trailing axis is accepted
+        too. Returns {dataset name: array}.
+        
+        Parameters
+        ----------
+        mode_shapes : Mapping[str, np.ndarray] | np.ndarray
+            The mode shapes to split.
+        ndim : int
+            The number of spatial dimensions.
+        components : tuple[str, ...]
+            The components to extract.
+
+        Returns
+        -------
+        out : dict[str, np.ndarray]
+            The mode shapes split by component.
+        """
     if isinstance(mode_shapes, Mapping):
         given = {normalize_components([k])[0]: v for k, v in mode_shapes.items()}
         if set(given) != set(components):
@@ -244,8 +313,22 @@ def _split_components(mode_shapes, ndim: int, components) -> dict[str, np.ndarra
 
 
 def _node_permutation(stored_ids: np.ndarray, given_ids) -> np.ndarray | None:
-    """Index array that reorders data given in ``given_ids`` order into the
-    file's ``stored_ids`` order. None if the orders already match."""
+    """ Index array that reorders data given in ``given_ids`` order into the
+        file's ``stored_ids`` order. None if the orders already match.
+        
+        Parameters
+        ----------
+        stored_ids : np.ndarray
+            The node IDs stored in the file.
+        given_ids : array-like
+            The node IDs provided for reordering.
+
+        Returns
+        -------
+        perm : np.ndarray | None
+            The permutation array to reorder ``given_ids`` into ``stored_ids`` order,
+            or None if the orders already match.
+        """
     given_ids = np.asarray(given_ids)
     if given_ids.shape != stored_ids.shape:
         raise ValueError(f"Got {given_ids.size} node IDs, file has {stored_ids.size} nodes")
@@ -260,15 +343,43 @@ def _node_permutation(stored_ids: np.ndarray, given_ids) -> np.ndarray | None:
 
 
 def _sims_per_chunk(n_sims: int, n_modes: int, n_nodes: int, target_bytes: int = 1 << 20) -> int:
-    """Simulations per mode-shape chunk: one for large meshes, several for
-    small ones so chunks stay around 1 MiB instead of a few hundred bytes."""
+    """ Simulations per mode-shape chunk: one for large meshes, several for
+        small ones so chunks stay around 1 MiB instead of a few hundred bytes.
+    
+        Parameters
+        ----------
+        n_sims : int
+            Total number of simulations.
+        n_modes : int
+            Number of mode shapes per simulation.
+        n_nodes : int
+            Number of nodes in the mesh.
+        target_bytes : int, optional
+            Target chunk size in bytes, by default 1 << 20.
+
+        Returns
+        -------
+        n : int
+            Number of simulations per chunk.
+        """
     per_sim = n_modes * n_nodes * 8
-    return int(max(1, min(n_sims, target_bytes // per_sim)))
+    n = int(max(1, min(n_sims, target_bytes // per_sim)))
+    return n
 
 
 def _open_for_reading(source):
-    """Context manager yielding an h5py.File for reading. ``source`` is a path,
-    or an already-open h5py.File, which is used as is and left open."""
+    """ Context manager yielding an h5py.File for reading. ``source`` is a path,
+        or an already-open h5py.File, which is used as is and left open.
+
+        Parameters
+        ----------
+        source : str | h5py.File
+            Path to the HDF5 file or an already-open h5py.File.
+
+        Returns
+        -------
+        context manager yielding an h5py.File opened for reading.
+    """
     if isinstance(source, h5py.File):
         if not source.id.valid:
             raise ValueError("The h5py.File passed in is closed")
@@ -277,6 +388,20 @@ def _open_for_reading(source):
 
 
 def _check_index(f: h5py.File, index: int) -> int:
+    """ Check that the simulation index is valid and return it as an int.
+
+        Parameters
+        ----------
+        f : h5py.File
+            HDF5 file containing the simulations.
+        index : int
+            Simulation index to check.
+
+        Returns
+        -------
+        index : int
+            Validated simulation index.
+        """
     n_sims = f["simulations/status"].shape[0]
     index = int(index)
     if not 0 <= index < n_sims:
@@ -285,8 +410,21 @@ def _check_index(f: h5py.File, index: int) -> int:
 
 
 def _samples_array(samples, Q: VariableSet) -> np.ndarray:
-    """Samples as (n_sims, n_vars) in VariableSet order. A DataFrame is
-    reordered by column name; a plain array must already be in Q's order."""
+    """ Samples as (n_sims, n_vars) in VariableSet order. A DataFrame is
+        reordered by column name; a plain array must already be in Q's order.
+        
+        Parameters
+        ----------
+        samples : array-like or DataFrame
+            Samples to be converted to an array.
+        Q : VariableSet
+            VariableSet defining the order of variables.
+
+        Returns
+        -------
+        arr : np.ndarray
+            Array of shape (n_sims, n_vars) with samples in the order of Q's variables.
+        """
     names = Q.variable_names()
     if isinstance(samples, pd.DataFrame):
         missing = [n for n in names if n not in samples.columns]
@@ -316,29 +454,29 @@ def create_simulation_file(
     compression_opts: int | None = 4,
     overwrite: bool = False,
 ) -> None:
-    """Write everything known up front and pre-allocate the result datasets.
+    """ Write everything known up front and pre-allocate the result datasets.
 
-    Parameters
-    ----------
-    Q : VariableSet describing the input variables
-    samples : array (n_sims, n_vars) in Q's variable order, e.g. from
-        ``Q.sample(n)``, or a DataFrame with Q's variable names as columns
-    n_modes : number of modes requested per solve
-    node_coordinates : array, shape (n_nodes, 3), or None if unknown. With
-        None, ``node_ids`` is required, the coordinates are stored as NaN and
-        the ``nodes`` group gets the attribute ``coordinates_missing = True``
-        (False otherwise).
-    node_ids : array, shape (n_nodes,), optional — defaults to 0..n_nodes-1.
-        Results passed to ``write_simulation_result`` are matched against these.
-    simulation_ids : array, shape (n_sims,), optional — defaults to 0..n_sims-1
-    components : displacement directions to store, e.g. "xy", ("x", "y") or
-        ("ux", "uy"). Defaults to all three. Only these datasets are created,
-        and every result written to the file must provide exactly these.
-    metadata : optional mapping written as root attributes
-        (e.g. {"solver": "MAPDL 2025 R2", "mode_normalization": "mass"})
-    compression, compression_opts : passed to h5py for the mode-shape datasets
-    overwrite : replace an existing file. False by default so a finished or
-        half-finished run is never wiped by accident.
+        Parameters
+        ----------
+        Q : VariableSet
+            Describing the input variables
+        samples : array (n_sims, n_vars) in Q's variable order
+            e.g. from ``Q.sample(n)``, or a DataFrame with Q's variable names as columns
+        n_modes : int
+            Number of modes requested per solve
+        node_coordinates : array, shape (n_nodes, 3), or None if unknown.
+            With None, ``node_ids`` is required, the coordinates are stored as NaN and the ``nodes`` group gets the attribute ``coordinates_missing = True`` (False otherwise).
+        node_ids : array, shape (n_nodes,), optional — defaults to 0..n_nodes-1.
+            Results passed to ``write_simulation_result`` are matched against these.
+        simulation_ids : array, shape (n_sims,), optional — defaults to 0..n_sims-1
+        components : displacement directions to store, e.g. "xy", ("x", "y") or ("ux", "uy").
+            Defaults to all three. Only these datasets are created, and every result written to the file must provide exactly these.
+        metadata : Mapping | None
+            Optional mapping written as root attributes (e.g. {"solver": "MAPDL 2025 R2", "mode_normalization": "mass"})
+        compression, compression_opts : int
+            Passed to h5py for the mode-shape datasets
+        overwrite : boolean
+            Whether to replace an existing file. False by default so a finished or half-finished run is never wiped by accident.
     """
     components = normalize_components(components)
     samples = _samples_array(samples, Q)
@@ -416,24 +554,21 @@ def create_simulation_file(
 # 2. Write one simulation's results
 # ---------------------------------------------------------------------------
 def write_simulation_result(path, index: int, frequencies, mode_shapes, node_ids=None) -> None:
-    """Store the results of simulation ``index`` and mark it done.
+    """ Store the results of simulation ``index`` and mark it done.
 
-    Parameters
-    ----------
-    index : row of ``samples`` this result belongs to
-    frequencies : array, shape (k,), with k <= n_modes. If the solver found
-        fewer modes than requested, the missing ones stay NaN.
-    mode_shapes : array of shape (k, n_nodes, C), where C is the number of
-        components stored in the file (in x, y, z order), or a dict
-        {component: (k, n_nodes)} with exactly the file's components as keys
-        ("x" or "ux" style). With a single component, (k, n_nodes) also works.
-    node_ids : node IDs in the order the mode shapes are given. If provided,
-        the data is reordered to the file's node order (and an error is raised
-        if the node sets differ). If omitted, the data must already be in the
-        file's node order.
-
-    Writing the same index again overwrites its earlier result.
-    """
+        Parameters
+        ----------
+        index : int
+            Row of ``samples`` this result belongs to. Writing the same index again overwrites its earlier result.
+        frequencies : array, shape (k,), with k <= n_modes.
+            If the solver found fewer modes than requested, the missing ones stay NaN.
+        mode_shapes : array
+            Array of shape (k, n_nodes, C), where C is the number of components stored in the file (in x, y, z order), or a dict
+            {component: (k, n_nodes)} with exactly the file's components as keys ("x" or "ux" style). With a single component, (k, n_nodes) also works.
+        node_ids : node IDs in the order the mode shapes are given.
+            If provided, the data is reordered to the file's node order (and an error is raised
+            if the node sets differ). If omitted, the data must already be in the file's node order.
+        """
     freqs = np.asarray(frequencies, dtype=np.float64).ravel()
 
     with h5py.File(path, "r+") as f:
@@ -471,8 +606,18 @@ def write_simulation_result(path, index: int, frequencies, mode_shapes, node_ids
 # 3. Mark a failed solve
 # ---------------------------------------------------------------------------
 def mark_failed(path, index: int, message: str = "") -> None:
-    """Mark simulation ``index`` as failed and store an optional error message.
-    Any earlier results for that index are cleared to NaN."""
+    """ Mark simulation ``index`` as failed and store an optional error message.
+        Any earlier results for that index are cleared to NaN.
+        
+        Parameters
+        ----------
+        path : str
+            Path to the simulation file.
+        index : int
+            Row of ``samples`` this result belongs to.
+        message : str, optional
+            Error message to store.
+        """
     with h5py.File(path, "r+") as f:
         index = _check_index(f, index)
         f["simulations/mode/frequencies"][index] = np.nan
@@ -486,10 +631,25 @@ def mark_failed(path, index: int, message: str = "") -> None:
 # Checking that a file meets the minimal requirements
 # ---------------------------------------------------------------------------
 class SimulationFileError(ValueError):
-    """Raised when a file lacks something the reader needs. ``problems`` lists
-    every issue found, not only the first."""
+    """ Raised when a file lacks something the reader needs. ``problems`` lists
+        every issue found, not only the first.
+        
+        Attributes
+        ----------
+        problems : list[str]
+            List of every issue found in the file.
+        """
 
     def __init__(self, problems: list[str], source=None):
+        """ Initialize the error with a list of problems and an optional source.
+
+            Parameters
+            ----------
+            problems : list[str]
+                List of every issue found in the file.
+            source : str, optional
+                Source of the error, e.g., the file path.
+        """
         self.problems = list(problems)
         where = f" ({source})" if source else ""
         super().__init__(
